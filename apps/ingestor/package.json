@@ -1,0 +1,22 @@
+{
+  "name": "ingestor",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@luminance/db": "workspace:*",
+    "@luminance/atproto": "workspace:*",
+    "@luminance/lexicons": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/ws": "^8.5.13"
+  }
+}

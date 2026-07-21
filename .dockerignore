@@ -1,0 +1,9 @@
+.git
+node_modules
+dist
+.next
+.turbo
+.env*
+!.env.example
+coverage
+.superpowers
