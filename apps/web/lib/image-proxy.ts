@@ -24,7 +24,7 @@ export async function proxyImage(
   req: { did: string; cid: string; preset: Preset; accept: string },
   deps: Deps = {},
 ) {
-  const width = PRESETS[req.preset];
+  const width = Object.prototype.hasOwnProperty.call(PRESETS, req.preset) ? PRESETS[req.preset] : undefined;
   if (!width) return { status: 400, cacheControl: "public, max-age=3600" };
 
   // Allowlist: only blobs the index references may be proxied (spec §11).

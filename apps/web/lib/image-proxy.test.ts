@@ -37,4 +37,18 @@ describe("image proxy", () => {
     expect(res.status).toBe(502);
     expect(res.cacheControl).toBe("public, max-age=30");
   });
+  it("404s when a real blob CID is requested under a different DID (cross-DID leakage)", async () => {
+    const db = await createTestDb(); await seed(db);
+    await db.insert(photographers).values({ did: "did:plc:b", handle: "other.photos" });
+    let fetched = false;
+    const res = await proxyImage(db, { did: "did:plc:b", cid: "bafk-photo", preset: "feed", accept: "" },
+      { fetchBlob: async () => { fetched = true; return Buffer.alloc(0); } });
+    expect(res.status).toBe(404);
+    expect(fetched).toBe(false);
+  });
+  it("400s on prototype-pollution preset (constructor)", async () => {
+    const db = await createTestDb(); await seed(db);
+    const res = await proxyImage(db, { did: "did:plc:a", cid: "bafk-photo", preset: "constructor" as any, accept: "" });
+    expect(res.status).toBe(400);
+  });
 });
