@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@luminance/db";
 import {
   mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile,
@@ -26,8 +26,9 @@ export class Indexer {
       return;
     }
     if (evt.kind === "account") {
-      const status = evt.account?.active ? "active" : (evt.account?.status === "takendown" ? "takedown" : "deactivated");
-      await this.db.update(photographers).set({ status: status as any }).where(eq(photographers.did, evt.did));
+      const status: "active" | "deactivated" | "takedown" =
+        evt.account?.active ? "active" : (evt.account?.status === "takendown" ? "takedown" : "deactivated");
+      await this.db.update(photographers).set({ status }).where(eq(photographers.did, evt.did));
       return;
     }
     if (evt.kind !== "commit" || !evt.commit) return;
@@ -35,12 +36,16 @@ export class Indexer {
     const uri = `at://${evt.did}/${c.collection}/${c.rkey}`;
 
     if (c.operation === "delete") {
-      await this.db.delete(photos).where(eq(photos.atUri, uri));
-      await this.db.delete(series).where(eq(series.atUri, uri));
-      await this.db.delete(seriesPhotos).where(eq(seriesPhotos.seriesUri, uri));
-      if (ph.backfillStatus === "running") {
-        await this.db.insert(tombstones).values({ atUri: uri }).onConflictDoNothing(); // spec §9 race guard
-      }
+      await this.db.transaction(async (tx) => {
+        await tx.delete(photos).where(eq(photos.atUri, uri));
+        await tx.delete(series).where(eq(series.atUri, uri));
+        await tx.delete(seriesPhotos).where(or(
+          eq(seriesPhotos.seriesUri, uri), eq(seriesPhotos.photoUri, uri), eq(seriesPhotos.itemUri, uri),
+        ));
+        if (ph.backfillStatus === "running") {
+          await tx.insert(tombstones).values({ atUri: uri }).onConflictDoNothing(); // spec §9 race guard
+        }
+      });
       this.stats.deleted++;
       return;
     }
@@ -67,6 +72,7 @@ export class Indexer {
         await this.db.update(photographers).set({
           displayName: sql`coalesce(${photographers.displayName}, ${p.displayName})`,
           avatarCid: sql`coalesce(${photographers.avatarCid}, ${p.avatarCid})`,
+          bio: sql`coalesce(${photographers.bio}, ${p.bio})`,
         }).where(eq(photographers.did, evt.did));
       } else if (GRAIN_COLLECTIONS.includes(c.collection)) {
         if (!ph.includeGrain) return;
@@ -74,7 +80,13 @@ export class Indexer {
         if (!m) return void this.stats.skipped++;
         if (m.photo) await this.applyPhotoRows([m.photo]);
         if (m.series) await this.applySeries(m.series);
-        if (m.seriesItem) await this.db.insert(seriesPhotos).values({ seriesUri: m.seriesItem.seriesUri, photoUri: m.seriesItem.photoUri, position: m.seriesItem.position }).onConflictDoUpdate({ target: [seriesPhotos.seriesUri, seriesPhotos.photoUri], set: { position: m.seriesItem.position } });
+        if (m.seriesItem) await this.db.insert(seriesPhotos).values({
+          seriesUri: m.seriesItem.seriesUri, photoUri: m.seriesItem.photoUri,
+          position: m.seriesItem.position, itemUri: m.seriesItem.itemUri,
+        }).onConflictDoUpdate({
+          target: [seriesPhotos.seriesUri, seriesPhotos.photoUri],
+          set: { position: m.seriesItem.position, itemUri: m.seriesItem.itemUri },
+        });
       }
     } catch (err) {
       this.stats.skipped++; // poison event costs one photo, never the stream (spec §12)
@@ -99,7 +111,9 @@ export class Indexer {
       target: [photos.atUri, photos.mediaIndex],
       set: { recordCid: sql`excluded.record_cid`, blobCid: sql`excluded.blob_cid`, alt: sql`excluded.alt`,
         title: sql`excluded.title`, caption: sql`excluded.caption`, sortAt: sql`excluded.sort_at`,
-        exif: sql`excluded.exif`, tags: sql`excluded.tags`, labels: sql`excluded.labels` },
+        exif: sql`excluded.exif`, tags: sql`excluded.tags`, labels: sql`excluded.labels`,
+        width: sql`excluded.width`, height: sql`excluded.height`, capturedAt: sql`excluded.captured_at`,
+        license: sql`excluded.license` },
     });
     this.stats.indexed += rows.length;
   }
@@ -107,9 +121,13 @@ export class Indexer {
   private async applySeries(m: MappedSeries) {
     await this.db.insert(series).values({ atUri: m.atUri, did: m.did, title: m.title, description: m.description, coverPhotoUri: m.coverPhotoUri, createdAt: m.createdAt })
       .onConflictDoUpdate({ target: series.atUri, set: { title: sql`excluded.title`, description: sql`excluded.description`, coverPhotoUri: sql`excluded.cover_photo_uri` } });
-    if (m.items.length) {
-      await this.db.delete(seriesPhotos).where(eq(seriesPhotos.seriesUri, m.atUri));
-      await this.db.insert(seriesPhotos).values(m.items.map((i) => ({ seriesUri: m.atUri, photoUri: i.photoUri, position: i.position })));
+    if (m.itemsAuthoritative) {
+      await this.db.transaction(async (tx) => {
+        await tx.delete(seriesPhotos).where(eq(seriesPhotos.seriesUri, m.atUri));
+        if (m.items.length) {
+          await tx.insert(seriesPhotos).values(m.items.map((i) => ({ seriesUri: m.atUri, photoUri: i.photoUri, position: i.position })));
+        }
+      });
     }
   }
 }

@@ -12,6 +12,7 @@ export interface MappedSeries {
   atUri: string; did: string; title: string; description: string | null;
   coverPhotoUri: string | null; createdAt: Date | null;
   items: { photoUri: string; position: number }[];
+  itemsAuthoritative: boolean;
 }
 export interface MappedProfile {
   did: string; displayName: string | null; bio: string | null;

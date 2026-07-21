@@ -19,7 +19,7 @@ export const GRAIN_COLLECTIONS = [GRAIN_PHOTO, GRAIN_GALLERY, GRAIN_GALLERY_ITEM
 export function mapGrainRecord(
   ctx: Ctx,
   record: any,
-): { photo?: MappedPhoto; series?: MappedSeries; seriesItem?: { seriesUri: string; photoUri: string; position: number } } | null {
+): { photo?: MappedPhoto; series?: MappedSeries; seriesItem?: { seriesUri: string; photoUri: string; position: number; itemUri: string } } | null {
   if (ctx.collection === GRAIN_PHOTO) {
     const cid = blobCid(record?.photo);
     if (!cid) return null;
@@ -39,13 +39,14 @@ export function mapGrainRecord(
       atUri: atUri(ctx), did: ctx.did, title: record.title,
       description: record.description ?? null, coverPhotoUri: null,
       createdAt: parseDate(record.createdAt), items: [],
+      itemsAuthoritative: false, // membership arrives via separate gallery.item records
     };
     return { series };
   }
   if (ctx.collection === GRAIN_GALLERY_ITEM) {
     if (typeof record?.gallery !== "string" || typeof record?.item !== "string") return null;
     const position = typeof record.position === "number" ? record.position : 0;
-    return { seriesItem: { seriesUri: record.gallery, photoUri: record.item, position } };
+    return { seriesItem: { seriesUri: record.gallery, photoUri: record.item, position, itemUri: atUri(ctx) } };
   }
   return null;
 }

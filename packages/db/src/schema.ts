@@ -90,4 +90,8 @@ export const seriesPhotos = pgTable("series_photos", {
   seriesUri: text("series_uri").notNull(),
   photoUri: text("photo_uri").notNull(),
   position: integer("position").notNull(),
-}, (t) => [primaryKey({ columns: [t.seriesUri, t.photoUri] })]);
+  itemUri: text("item_uri"),
+}, (t) => [
+  primaryKey({ columns: [t.seriesUri, t.photoUri] }),
+  index("series_photos_item_idx").on(t.itemUri),
+]);

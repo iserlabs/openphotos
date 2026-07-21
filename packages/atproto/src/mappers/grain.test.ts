@@ -39,10 +39,11 @@ describe("mapGrainRecord", () => {
       description: gallery.description,
       coverPhotoUri: null,
       items: [],
+      itemsAuthoritative: false, // membership arrives via separate gallery.item records
     });
   });
 
-  it("maps a gallery.item record to a seriesItem with gallery/item at-uris and position", () => {
+  it("maps a gallery.item record to a seriesItem with gallery/item at-uris, position, and its own atUri", () => {
     expect(GRAIN_COLLECTIONS.length).toBeGreaterThan(2);
     const ictx = { did: "did:plc:g", collection: GRAIN_GALLERY_ITEM, rkey: "3", cid: "c", indexedAt: new Date() };
     const si = mapGrainRecord(ictx, item);
@@ -50,6 +51,7 @@ describe("mapGrainRecord", () => {
       seriesUri: item.gallery,
       photoUri: item.item,
       position: 5,
+      itemUri: "at://did:plc:g/social.grain.gallery.item/3",
     });
   });
 

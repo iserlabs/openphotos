@@ -69,6 +69,12 @@ describe("mapLuminanceSeries malformed items", () => {
     const m = mapLuminanceSeries(ctx, { title: "T", photos: [null, { uri: "at://did:plc:k/social.luminance.portfolio.photo/1" }, {}], createdAt: "2026-07-01T00:00:00Z" })!;
     expect(m.items).toEqual([{ photoUri: "at://did:plc:k/social.luminance.portfolio.photo/1", position: 1 }]);
   });
+  it("is authoritative for membership even when photos is empty", () => {
+    const ctx = { did: "did:plc:k", collection: "social.luminance.portfolio.series", rkey: "2", cid: "c", indexedAt: new Date() };
+    const m = mapLuminanceSeries(ctx, { title: "T", photos: [], createdAt: "2026-07-01T00:00:00Z" })!;
+    expect(m.itemsAuthoritative).toBe(true);
+    expect(m.items).toEqual([]);
+  });
 });
 
 describe("mapLuminanceProfile", () => {

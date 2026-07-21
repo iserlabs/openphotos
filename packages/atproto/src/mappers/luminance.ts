@@ -31,6 +31,7 @@ export function mapLuminanceSeries(ctx: Ctx, record: any): MappedSeries | null {
     items: record.photos
       .map((p: any, i: number) => ({ photoUri: p?.uri, position: i }))
       .filter((p: { photoUri: unknown }) => typeof p.photoUri === "string" && p.photoUri.length > 0) as { photoUri: string; position: number }[],
+    itemsAuthoritative: true, // a Luminance series record's photos array IS the membership, even when empty
   };
 }
 
