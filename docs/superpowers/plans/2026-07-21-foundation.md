@@ -28,7 +28,7 @@
 ### Task 1: Monorepo scaffold
 
 **Files:**
-- Create: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `.nvmrc`, `vitest.workspace.ts`
+- Create: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `.nvmrc`
 - Create: `packages/db/package.json`, `packages/db/tsconfig.json`, `packages/db/src/index.ts`, `packages/db/src/smoke.test.ts`
 
 **Interfaces:**
@@ -1140,7 +1140,7 @@ export class Indexer {
 
   private async applySeries(m: MappedSeries) {
     await this.db.insert(series).values({ atUri: m.atUri, did: m.did, title: m.title, description: m.description, coverPhotoUri: m.coverPhotoUri, createdAt: m.createdAt })
-      .onConflictDoUpdate({ target: photos !== undefined ? [series.atUri] : [series.atUri], set: { title: sql`excluded.title`, description: sql`excluded.description`, coverPhotoUri: sql`excluded.cover_photo_uri` } });
+      .onConflictDoUpdate({ target: series.atUri, set: { title: sql`excluded.title`, description: sql`excluded.description`, coverPhotoUri: sql`excluded.cover_photo_uri` } });
     if (m.items.length) {
       await this.db.delete(seriesPhotos).where(eq(seriesPhotos.seriesUri, m.atUri));
       await this.db.insert(seriesPhotos).values(m.items.map((i) => ({ seriesUri: m.atUri, photoUri: i.photoUri, position: i.position })));
@@ -1162,7 +1162,7 @@ export class Indexer {
 
 **Interfaces:**
 - Consumes: `Indexer.handleEvent`, `ingestCursors` table.
-- Produces: `JetstreamConsumer` class: `new JetstreamConsumer({ db, url, connectionId, collections, getDids, onEvent, onStaleCursor, replayWindowUs? })`, methods `start()`, `stop()`, `updateDids(dids: string[])` (sends `options_update`). Cursor commits **after** `onEvent` resolves (batch of 1 in v1 — the contract, not the batch size, is what matters).
+- Produces: `JetstreamConsumer` class: `new JetstreamConsumer({ db, url, connectionId, collections, getDids, onEvent, onStaleCursor, replayWindowUs? })`, methods `start()`, `stop()`, `refreshDids()` (re-sends `options_update`). Cursor commits **after** `onEvent` resolves (batch of 1 in v1 — the contract, not the batch size, is what matters).
 
 - [ ] **Step 1: Failing tests** — `jetstream.test.ts` (spin a local `ws` server as a fake Jetstream):
 ```ts
@@ -1201,13 +1201,13 @@ describe("JetstreamConsumer", () => {
   });
   it("includes cursor and filters in the subscribe URL", async () => {
     const db = await createTestDb();
-    await db.insert(ingestCursors).values({ connectionId: "main", timeUs: 999n });
+    await db.insert(ingestCursors).values({ connectionId: "main", timeUs: 999_000_000n });
     let seenUrl = "";
     const url = fakeJetstream((u) => { seenUrl = u; });
     consumer = new JetstreamConsumer({ db, url, connectionId: "main", collections: ["a.b.c"], getDids: async () => ["did:plc:x"], onEvent: async () => {}, onStaleCursor: async () => {} });
     await consumer.start();
     await new Promise((r) => setTimeout(r, 100));
-    expect(seenUrl).toContain("cursor=999");
+    expect(seenUrl).toContain("cursor=994000000"); // stored cursor minus 5s overlap
     expect(seenUrl).toContain("wantedCollections=a.b.c");
     expect(seenUrl).toContain("wantedDids=did%3Aplc%3Ax");
   });
@@ -1266,7 +1266,7 @@ export class JetstreamConsumer {
     u.pathname = "/subscribe";
     for (const c of this.o.collections) u.searchParams.append("wantedCollections", c);
     for (const d of dids) u.searchParams.append("wantedDids", d);
-    if (cursor !== null) u.searchParams.set("cursor", String(cursor));
+    if (cursor !== null) u.searchParams.set("cursor", String(cursor > 5_000_000n ? cursor - 5_000_000n : 0n)); // 5s replay overlap; idempotent upserts make it harmless (spec §9)
     this.ws = new WebSocket(u.toString());
     this.ws.on("open", () => { this.backoffMs = 1000; });
     this.ws.on("message", (data) => void this.handleMessage(data.toString()));
@@ -1294,7 +1294,7 @@ export class JetstreamConsumer {
     this.lastDids = j;
     this.ws.send(JSON.stringify({ type: "options_update", payload: { wantedCollections: this.o.collections, wantedDids: dids } }));
   }
-  updateDids(dids: string[]) { this.lastDids = ""; void this.pushDidUpdate(); }
+  refreshDids() { this.lastDids = ""; void this.pushDidUpdate(); }
 
   private async reconnect() {
     if (this.stopped) return;
@@ -1377,7 +1377,7 @@ Run — Expected: FAIL.
 
 - [ ] **Step 2: Implement** — `backfill.ts`:
 ```ts
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { photographers, tombstones, type Db } from "@luminance/db";
 import { resolvePdsEndpoint as realResolve, safeJsonFetch, mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile, mapGrainRecord, GRAIN_COLLECTIONS, type Ctx } from "@luminance/atproto";
 import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
@@ -1413,9 +1413,8 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
           catch (e) { if (a >= attempts) throw e; await sleep(opts.retryDelayMs ?? 1000 * 2 ** a); }
         }
         for (const r of page.records ?? []) {
-          const [, , c, rkey] = String(r.uri).replace("at://", "").split("/").length === 3
-            ? ["", ...String(r.uri).replace("at://", "").split("/")] : ["", "", collection, String(r.uri).split("/").pop()];
-          const ctx: Ctx = { did, collection, rkey: rkey!, cid: r.cid, indexedAt: new Date() };
+          const rkey = String(r.uri).split("/").pop()!;
+          const ctx: Ctx = { did, collection, rkey, cid: r.cid, indexedAt: new Date() };
           await applyOne(db, indexer, ctx, r.value);
           count++;
         }
@@ -1423,7 +1422,7 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
         await sleep(opts.retryDelayMs ?? 250); // throttle (spec §9)
       } while (cursor && count < cap);
     }
-    await db.delete(tombstones); // prune on completion (spec §9)
+    await db.delete(tombstones).where(like(tombstones.atUri, `at://${did}/%`)); // prune only this DID's tombstones — concurrent backfills of other DIDs must keep theirs (spec §9)
     await db.update(photographers).set({ backfillStatus: "complete" }).where(eq(photographers.did, did));
   } catch (err) {
     console.error("backfill failed", { did, err: String(err) });
