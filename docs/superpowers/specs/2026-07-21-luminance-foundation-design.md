@@ -83,7 +83,7 @@ Four sub-projects, each with its own spec → plan → implementation cycle:
 NSID authority = luminance.social domain (DNS-verified); schemas also published as `com.atproto.lexicon.schema` records.
 
 **`social.luminance.portfolio.photo`** — one photograph:
-- `image` (blob; `maxSize` set within common PDS defaults — the effective ceiling is host-PDS policy, not ours)
+- `image` (blob; schema `maxSize` 20MB — the *effective* ceiling is always host-PDS policy; phase-3 publisher tooling resizes to fit the target PDS. Foundation has no write path, so this constant only gates future publishers)
 - `aspectRatio` {width, height} — UI reserves layout before pixels arrive
 - `alt` (strongly encouraged), `title`, `caption`
 - `capturedAt`, `createdAt`
@@ -117,7 +117,7 @@ Two categories, and the distinction is load-bearing:
 - `oauth_sessions`, `oauth_states` — persistence stores required by `@atproto/oauth-client-node`.
 - `ingest_cursors` — per-connection `time_us` checkpoint. (Not rebuild-relevant but operationally durable.)
 
-`sort_at` = coalesce(capturedAt, createdAt) **clamped to `indexed_at` + small skew** — client-supplied timestamps cannot pin a photo atop the feed (same defense Bluesky uses).
+`sort_at` = coalesce(capturedAt, createdAt) **clamped to `indexed_at` + 10 minutes max** — client-supplied timestamps cannot pin a photo atop the feed (same defense Bluesky uses).
 
 Feed query: keyset pagination on `(sort_at, at_uri)`, filtered by no-override-hidden, no-takedown, photographer active; partial indexes match that exact predicate.
 
@@ -125,7 +125,7 @@ Feed query: keyset pagination on `(sort_at, at_uri)`, filtered by no-override-hi
 
 **Live path:** Jetstream subscription, `wantedCollections` = the four source families, `wantedDids` = registered photographers. The ingestor polls the registry (~30s) and pushes `options_update` down the socket on change — no reconnect. Commit events → mapper → idempotent upsert keyed by AT-URI. Deletes remove rows + series-join cleanup. `identity` events refresh stored handles (index is DID-keyed; handle changes are cosmetic). `account` events (deactivated/taken-down) hide the photographer's content immediately.
 
-**Backfill path:** on registration (and on re-enabling a source toggle), a job walks the DID's repo per collection via paginated `listRecords` through the same mappers. Per-collection cursors make jobs resumable; throttling respects PDS rate limits; a per-collection recent-N-thousand cap prevents a 200k-record account from wedging the queue.
+**Backfill path:** on registration (and on re-enabling a source toggle), a job walks the DID's repo per collection via paginated `listRecords` through the same mappers. Per-collection cursors make jobs resumable; throttling respects PDS rate limits; a per-collection cap of the 5,000 most recent records prevents a 200k-record account from wedging the queue.
 
 **The delete-vs-backfill race is real and handled:** a delete event arriving while backfill runs writes a short-lived **tombstone**; backfill upserts skip tombstoned URIs; tombstones are pruned when the backfill completes. (Create/update races are benign via idempotent upserts.)
 
