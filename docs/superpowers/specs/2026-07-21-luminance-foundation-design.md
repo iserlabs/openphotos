@@ -100,7 +100,7 @@ Photos are referenced by strong ref (`uri` + `cid`) so phase-2 interactions use 
 **Indexed source lexicons (read-only — we never write anyone else's lexicon):**
 - `social.luminance.*` (above)
 - `app.bsky.feed.post` — top-level posts with image embeds only; replies skipped (conversation, not portfolio); quote-posts-with-media skipped in v1; one photo row per embedded image sharing a `group_key`
-- `social.grain.*` — photos + gallery membership → photos + series
+- `social.grain.*` — photos + gallery membership → photos + series. **Caveat:** the exact Grain NSIDs and record shapes are asserted from secondary sources, not verified — confirming them against Grain's open-source repo (github.com/grainsocial/grain) is an explicit implementation-plan task, and mappers are written against their published lexicons as found.
 - `app.bsky.actor.profile` — profile fallback (precedence: Luminance profile → Bluesky profile → bare handle)
 
 ## 8. Data model
@@ -108,12 +108,12 @@ Photos are referenced by strong ref (`uri` + `cid`) so phase-2 interactions use 
 Two categories, and the distinction is load-bearing:
 
 **Index tables (truncate-and-rebuild safe):**
-- `photos` — `at_uri` PK, `did`, `source` (`luminance|bsky|grain`), `record_cid`, `blob_cid`, `width`, `height`, `alt`, `title`, `caption`, `captured_at`, `created_at`, `sort_at`, `exif` JSONB, `tags[]`, `license`, `labels[]`, `group_key`, `indexed_at`.
+- `photos` — **composite PK `(at_uri, media_index)`** (a multi-image Bluesky post yields one row per embedded image under the same AT-URI; `media_index` = 0 for single-photo Luminance/Grain records), `did`, `source` (`luminance|bsky|grain`), `record_cid`, `blob_cid`, `width`, `height`, `alt`, `title`, `caption`, `captured_at`, `created_at`, `sort_at`, `exif` JSONB, `tags[]`, `license`, `labels[]`, `group_key`, `indexed_at`. Record deletion removes *all* rows for the AT-URI.
 - `series`, `series_photos` (`series_uri`, `photo_uri`, `position`).
 
 **Durable app-state tables (backed up; survive index rebuilds):**
 - `photographers` — `did` PK, `handle`, `display_name`, `avatar_cid`, `bio`, `website`, `status` (`active | pending_review | deactivated | deregistered | takedown`), `include_bsky`, `include_grain` (source toggles), `registered_at`, `backfill_status`.
-- `photo_overrides` — `at_uri` PK, `hidden` (photographer curation), `takedown` (admin/DMCA), reason, timestamps. Kept out of `photos` precisely so index rebuilds cannot erase curation or takedowns.
+- `photo_overrides` — PK `(at_uri, media_index)` (mirrors `photos`, so one image of a multi-image post can be hidden independently), `hidden` (photographer curation), `takedown` (admin/DMCA), reason, timestamps. Kept out of `photos` precisely so index rebuilds cannot erase curation or takedowns.
 - `oauth_sessions`, `oauth_states` — persistence stores required by `@atproto/oauth-client-node`.
 - `ingest_cursors` — per-connection `time_us` checkpoint. (Not rebuild-relevant but operationally durable.)
 
@@ -140,7 +140,7 @@ Feed query: keyset pagination on `(sort_at, at_uri)`, filtered by no-override-hi
 - `/` — feed. Justified-row grid preserving aspect ratios (zero layout shift via `aspectRatio`), keyset-paginated infinite scroll, discipline/tag filter chips. Reverse-chronological only in v1. Labeled content renders blurred with click-through.
 - `/[handle]` — photographer profile: avatar, bio, location, prominent link out to their portfolio site, photo grid + series shelf. DID-based route is the permanent fallback URL (handles can change).
 - `/[handle]/series/[rkey]` — series page, record-ordered.
-- `/photo/[did]/[collection]/[rkey]` — photo detail; the route triple is the AT-URI. 2048px rendition, caption, EXIF panel, license, tags, source link ("view on Bluesky" / "view on their site"). Lightbox with keyboard nav; alt text throughout.
+- `/photo/[did]/[collection]/[rkey]` — photo detail; the route triple is the AT-URI and the page renders the *full record* — all images of a multi-image post, with per-image anchors — not a single row. 2048px rendition, caption, EXIF panel, license, tags, source link ("view on Bluesky" / "view on their site"). Lightbox with keyboard nav; alt text throughout.
 - `/register`, `/settings`, `/dmca`, `/about` — app routes.
 
 **SEO/sharing:** every photo/profile page emits OG tags with a proxied rendition; sitemap generated. A photography hub lives on link previews.
