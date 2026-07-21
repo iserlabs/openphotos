@@ -2,6 +2,8 @@ import { Lexicons, BlobRef, type LexiconDoc, type ValidationResult } from "@atpr
 import photo from "../lexicons/social/luminance/portfolio/photo.json" with { type: "json" };
 import series from "../lexicons/social/luminance/portfolio/series.json" with { type: "json" };
 import profile from "../lexicons/social/luminance/actor/profile.json" with { type: "json" };
+import strongRef from "../lexicons/com/atproto/repo/strongRef.json" with { type: "json" };
+import labelDefs from "../lexicons/com/atproto/label/defs.json" with { type: "json" };
 
 export const LUMINANCE_PHOTO = "social.luminance.portfolio.photo";
 export const LUMINANCE_SERIES = "social.luminance.portfolio.series";
@@ -10,7 +12,7 @@ export const BSKY_POST = "app.bsky.feed.post";
 export const BSKY_PROFILE = "app.bsky.actor.profile";
 export const GRAIN_PREFIX = "social.grain.";
 
-export const lexicons = [photo, series, profile] as LexiconDoc[];
+export const lexicons = [photo, series, profile, strongRef, labelDefs] as LexiconDoc[];
 
 /**
  * `@atproto/lexicon`'s blob validator requires an actual `BlobRef` instance

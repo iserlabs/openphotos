@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { lexiconValidator, LUMINANCE_PHOTO } from "./index.js";
+import { lexiconValidator, LUMINANCE_PHOTO, LUMINANCE_SERIES } from "./index.js";
 
 describe("luminance lexicons", () => {
   it("validates a well-formed photo record", () => {
@@ -23,5 +23,31 @@ describe("luminance lexicons", () => {
       "utf-8",
     );
     expect(raw.toLowerCase()).not.toMatch(/gps|latitude|longitude/);
+  });
+  it("validates a series record with a non-empty photos array (strongRef)", () => {
+    const res = lexiconValidator.validate(LUMINANCE_SERIES, {
+      $type: LUMINANCE_SERIES,
+      title: "T",
+      createdAt: "2026-07-21T00:00:00.000Z",
+      photos: [
+        {
+          uri: "at://did:plc:a/social.luminance.portfolio.photo/1",
+          cid: "bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a",
+        },
+      ],
+    });
+    expect(res.success).toBe(true);
+  });
+  it("validates a photo record carrying labels (com.atproto.label.defs#selfLabels)", () => {
+    const res = lexiconValidator.validate(LUMINANCE_PHOTO, {
+      $type: LUMINANCE_PHOTO,
+      image: { $type: "blob", ref: { $link: "bafkreib3vqp" }, mimeType: "image/jpeg", size: 12345 },
+      createdAt: "2026-07-21T00:00:00.000Z",
+      labels: {
+        $type: "com.atproto.label.defs#selfLabels",
+        values: [{ val: "nudity" }],
+      },
+    });
+    expect(res.success).toBe(true);
   });
 });
