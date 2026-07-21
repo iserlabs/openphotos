@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import { Indexer } from "./indexer.js";
 import { JetstreamConsumer } from "./jetstream.js";
 import { startHealthServer } from "./health.js";
+import { startBackfillLoop } from "./backfill.js";
 
 const WANTED_COLLECTIONS = [
   LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS,
@@ -27,11 +28,9 @@ async function onStaleCursor(db: Db): Promise<void> {
 
 /**
  * Everything that should run for the life of the process besides one-shot
- * setup: the Jetstream consumer and the health server today.
- *
- * Task 10 adds the backfill-runner loop here (polls photographers with
- * backfillStatus 'pending'/'running' and drives them through a PDS
- * listRecords backfill).
+ * setup: the Jetstream consumer, the health server, and the backfill-runner
+ * loop (polls photographers with backfillStatus 'pending' and drives each
+ * through a PDS listRecords backfill).
  */
 async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   const consumer = new JetstreamConsumer({
@@ -45,6 +44,7 @@ async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   });
 
   startHealthServer(indexer.stats, config.HEALTH_PORT);
+  startBackfillLoop(db, indexer);
   await consumer.start();
 }
 
