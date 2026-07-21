@@ -28,7 +28,9 @@ export function mapLuminanceSeries(ctx: Ctx, record: any): MappedSeries | null {
   return {
     atUri: atUri(ctx), did: ctx.did, title: record.title, description: record.description ?? null,
     coverPhotoUri: record.coverPhoto?.uri ?? null, createdAt: parseDate(record.createdAt),
-    items: record.photos.map((p: any, i: number) => ({ photoUri: p.uri, position: i })).filter((p: any) => p.photoUri),
+    items: record.photos
+      .map((p: any, i: number) => ({ photoUri: p?.uri, position: i }))
+      .filter((p: { photoUri: unknown }) => typeof p.photoUri === "string" && p.photoUri.length > 0) as { photoUri: string; position: number }[],
   };
 }
 

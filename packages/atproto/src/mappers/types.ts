@@ -19,11 +19,19 @@ export interface MappedProfile {
 }
 export const atUri = (c: Ctx) => `at://${c.did}/${c.collection}/${c.rkey}`;
 export function blobCid(blob: any): string | null {
-  return blob?.ref?.$link ?? (typeof blob?.ref === "object" && blob.ref?.toString?.()) ?? null;
+  if (typeof blob?.ref?.$link === "string" && blob.ref.$link) return blob.ref.$link;
+  if (blob?.ref && typeof blob.ref === "object" && typeof blob.ref.toString === "function") {
+    const s = blob.ref.toString();
+    return s && s !== "[object Object]" ? s : null;
+  }
+  return null;
 }
 export function selfLabelVals(labels: any): string[] {
   if (labels?.$type !== "com.atproto.label.defs#selfLabels") return [];
-  return (labels.values ?? []).map((v: any) => String(v.val)).filter(Boolean);
+  if (!Array.isArray(labels.values)) return [];
+  return labels.values
+    .filter((v: any) => v && typeof v.val === "string" && v.val.length > 0)
+    .map((v: any) => v.val as string);
 }
 export function parseDate(s: unknown): Date | null {
   if (typeof s !== "string") return null;
