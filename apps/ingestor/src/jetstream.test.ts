@@ -52,4 +52,70 @@ describe("JetstreamConsumer", () => {
     await consumer.start();
     expect(stale).toBe(true);
   });
+
+  it("reconnect() survives a transient getDids() failure without an unhandled rejection", async () => {
+    const db = await createTestDb();
+    let getDidsCalls = 0;
+    const getDids = async () => {
+      getDidsCalls++;
+      if (getDidsCalls === 2) throw new Error("transient db blip"); // fails only on the reconnect attempt
+      return ["did:plc:kevin"];
+    };
+    let connCount = 0;
+    const url = fakeJetstream(() => { connCount++; });
+
+    const unhandled: unknown[] = [];
+    const onUnhandledRejection = (err: unknown) => { unhandled.push(err); };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      consumer = new JetstreamConsumer({
+        db, url, connectionId: "main", collections: [],
+        getDids,
+        onEvent: async () => {},
+        onStaleCursor: async () => {},
+      });
+      await consumer.start();
+      expect(connCount).toBe(1);
+
+      (wss as any).lastSocket.terminate(); // force-close to trigger the close -> reconnect path
+
+      // Worst case: first backoff (1000ms + <=500ms jitter) attempts a reconnect
+      // whose getDids() throws, then a second backoff (2000ms + <=500ms jitter)
+      // retries and succeeds. Budget comfortably above that ~4s ceiling.
+      await new Promise((r) => setTimeout(r, 4500));
+
+      expect(connCount).toBeGreaterThanOrEqual(2); // reconnect eventually succeeded
+      expect(unhandled).toEqual([]); // the transient getDids() throw never escaped as a crash
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+  }, 8000);
+
+  it("stop() cancels a pending reconnect backoff so no new connection opens afterward", async () => {
+    const db = await createTestDb();
+    let connCount = 0;
+    const url = fakeJetstream(() => { connCount++; });
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: [],
+      getDids: async () => ["did:plc:kevin"],
+      onEvent: async () => {},
+      onStaleCursor: async () => {},
+    });
+    await consumer.start();
+    expect(connCount).toBe(1);
+
+    (wss as any).lastSocket.terminate(); // force-close to trigger the close -> reconnect path
+    // Let the close handler fire and reconnect() enter its backoff sleep (a
+    // pending timer) before calling stop() -- that pending-timer window is
+    // exactly what stop() must cancel. (Calling stop() with zero delay never
+    // exercises the race: `stopped` would already be true before the close
+    // event even reaches the client socket.)
+    await new Promise((r) => setTimeout(r, 100));
+    await consumer.stop();
+
+    const countAfterStop = connCount;
+    await new Promise((r) => setTimeout(r, 2500)); // > worst-case initial backoff (1000ms + 500ms jitter)
+    expect(connCount).toBe(countAfterStop); // no reconnect opened a new connection after stop()
+  }, 6000);
 });

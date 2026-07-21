@@ -14,6 +14,7 @@ interface Opts {
 export class JetstreamConsumer {
   private ws?: WebSocket; private stopped = false; private backoffMs = 1000;
   private didPoll?: ReturnType<typeof setInterval>; private lastDids = "";
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
   constructor(private o: Opts) {}
 
   async start() {
@@ -45,7 +46,7 @@ export class JetstreamConsumer {
           for (const c of this.o.collections) u.searchParams.append("wantedCollections", c);
           for (const d of dids) u.searchParams.append("wantedDids", d);
           if (cursor !== null) u.searchParams.set("cursor", String(cursor > 5_000_000n ? cursor - 5_000_000n : 0n)); // 5s replay overlap; idempotent upserts make it harmless (spec §9)
-          const ws = new WebSocket(u.toString());
+          const ws = new WebSocket(u.toString(), { handshakeTimeout: 15_000 }); // surface a black-holed TCP connect as an error instead of hanging forever
           this.ws = ws;
           ws.once("open", () => { this.backoffMs = 1000; resolve(); });
           ws.once("error", () => resolve()); // don't hang start()/reconnect() on a failed connection attempt
@@ -83,10 +84,22 @@ export class JetstreamConsumer {
 
   private async reconnect() {
     if (this.stopped) return;
-    await new Promise((r) => setTimeout(r, this.backoffMs + Math.random() * 500));
+    await new Promise<void>((r) => { this.reconnectTimer = setTimeout(r, this.backoffMs + Math.random() * 500); });
+    if (this.stopped) return; // stop() may have raced the backoff sleep
     this.backoffMs = Math.min(this.backoffMs * 2, 60_000);
-    await this.connect(await this.readCursor());
+    try {
+      await this.connect(await this.readCursor());
+    } catch (err) {
+      console.error("jetstream: reconnect attempt failed, retrying", err); // transient failure (e.g. getDids() DB blip); never crash, just back off again
+      void this.reconnect();
+    }
   }
 
-  async stop() { this.stopped = true; clearInterval(this.didPoll); this.ws?.close(); await this.queue; }
+  async stop() {
+    this.stopped = true;
+    clearInterval(this.didPoll);
+    clearTimeout(this.reconnectTimer);
+    this.ws?.close();
+    await this.queue;
+  }
 }
