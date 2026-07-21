@@ -1,4 +1,4 @@
-import { safeJsonFetch, assertPublicHttps } from "./safe-fetch.js";
+import { safeJsonFetch } from "./safe-fetch.js";
 
 type FetchJson = (url: string) => Promise<unknown>;
 
