@@ -1,0 +1,17 @@
+{
+  "$type": "social.grain.photo",
+  "alt": "A photo of the head, neck, and shoulders of a great blue heron (Ardea herodias) with its beak slightly open, facing to the right. It has a long pale neck, a long sharp gray and yellow-orange beak, white head with dark blue-gray stripes above its eyes, long thin dark blue-gray crest feathers on the back of its head, and bright yellow irises. The background is out of focus gray-blue water.",
+  "photo": {
+    "ref": {
+      "$link": "bafkreicmhcy2i77qnm4gueg62spdupzxcvgvmsfiqlmrj6lbsdfesbsqxq"
+    },
+    "size": 870274,
+    "$type": "blob",
+    "mimeType": "image/jpeg"
+  },
+  "createdAt": "2026-04-08T02:07:42.538Z",
+  "aspectRatio": {
+    "width": 2000,
+    "height": 1334
+  }
+}
