@@ -1,0 +1,77 @@
+{
+  "text": "Beautiful landscape photography from my recent trip",
+  "createdAt": "2026-07-20T10:30:00Z",
+  "embed": {
+    "$type": "app.bsky.embed.images",
+    "images": [
+      {
+        "image": {
+          "$type": "blob",
+          "ref": {
+            "$link": "bafk1img1"
+          },
+          "mimeType": "image/jpeg",
+          "size": 102400
+        },
+        "alt": "Mountain landscape at sunrise",
+        "aspectRatio": {
+          "width": 3,
+          "height": 2
+        }
+      },
+      {
+        "image": {
+          "$type": "blob",
+          "ref": {
+            "$link": "bafk1img2"
+          },
+          "mimeType": "image/jpeg",
+          "size": 98765
+        },
+        "alt": "Forest trail with golden light",
+        "aspectRatio": {
+          "width": 4,
+          "height": 3
+        }
+      },
+      {
+        "image": {
+          "$type": "blob",
+          "ref": {
+            "$link": "bafk1img3"
+          },
+          "mimeType": "image/jpeg",
+          "size": 115200
+        },
+        "alt": "Lake reflection at dusk",
+        "aspectRatio": {
+          "width": 16,
+          "height": 9
+        }
+      },
+      {
+        "image": {
+          "$type": "blob",
+          "ref": {
+            "$link": "bafk1img4"
+          },
+          "mimeType": "image/jpeg",
+          "size": 105500
+        },
+        "alt": "Stars over the valley",
+        "aspectRatio": {
+          "width": 1,
+          "height": 1
+        }
+      }
+    ]
+  },
+  "labels": {
+    "$type": "com.atproto.label.defs#selfLabels",
+    "values": [
+      {
+        "val": "artistic"
+      }
+    ]
+  }
+}
