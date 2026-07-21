@@ -22,3 +22,10 @@ Every top-level route segment under `app/` must be **dotless** (e.g.
 (`alice.bsky.social`), and the profile route resolves handles directly off
 the root path (`/[handle]`) — a dotted top-level route would be ambiguous
 with, or could shadow, a handle.
+
+The invariant applies only to **top-level** segments. Nested, file-like
+terminal segments may contain dots: the OAuth discovery documents live at
+`app/oauth/client-metadata.json/route.ts` and `app/oauth/jwks.json/route.ts`.
+Their top-level segment (`oauth`) is dotless and can never collide with a
+handle; the dotted `*.json` segments are nested under it, so they're safe and
+serve the exact filenames the ATProto authorization server fetches.

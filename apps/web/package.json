@@ -10,14 +10,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@atproto/jwk-jose": "^0.2.4",
+    "@atproto/oauth-client-node": "^0.4.9",
+    "@luminance/atproto": "workspace:*",
+    "@luminance/db": "workspace:*",
+    "@luminance/lexicons": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "iron-session": "^8.0.4",
     "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sharp": "^0.34.4",
-    "drizzle-orm": "^0.45.2",
-    "@luminance/db": "workspace:*",
-    "@luminance/atproto": "workspace:*",
-    "@luminance/lexicons": "workspace:*"
+    "sharp": "^0.34.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

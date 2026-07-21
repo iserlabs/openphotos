@@ -41,6 +41,9 @@ export default function RootLayout({
               <Link href="/register" className="transition-colors hover:text-zinc-100">
                 Register
               </Link>
+              <Link href="/settings" className="transition-colors hover:text-zinc-100">
+                Settings
+              </Link>
             </nav>
           </div>
         </header>

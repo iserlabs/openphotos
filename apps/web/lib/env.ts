@@ -4,4 +4,5 @@ export const env = {
   get PUBLIC_URL() { return req("PUBLIC_URL"); },
   get SESSION_SECRET() { return req("SESSION_SECRET"); },
   get ADMIN_DIDS() { return (process.env.ADMIN_DIDS ?? "").split(",").filter(Boolean); },
+  get OAUTH_JWK_1() { return req("OAUTH_JWK_1"); },
 };
