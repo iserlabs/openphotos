@@ -81,4 +81,39 @@ describe("runBackfill", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].source).toBe("luminance"); // no bsky rows made it in
   });
+
+  it("multi-DID tombstone isolation: only prunes the backfilled DID's tombstones", async () => {
+    const db = await createTestDb();
+    const DID_A = "did:plc:alice";
+    const DID_B = "did:plc:bob";
+
+    // Seed two photographers
+    await db.insert(photographers).values([
+      { did: DID_A, handle: "alice.photos", backfillStatus: "running" },
+      { did: DID_B, handle: "bob.photos", backfillStatus: "pending" },
+    ]);
+
+    // Insert tombstones for both DIDs
+    const tombstoneA = `at://${DID_A}/social.luminance.portfolio.photo/tomb-a`;
+    const tombstoneB = `at://${DID_B}/social.luminance.portfolio.photo/tomb-b`;
+    await db.insert(tombstones).values([
+      { atUri: tombstoneA },
+      { atUri: tombstoneB },
+    ]);
+
+    // Run backfill for DID A only
+    const fetchJsonForA = async (url: string) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith("/xrpc/com.atproto.repo.listRecords") && u.searchParams.get("repo") === DID_A && !u.searchParams.get("cursor")) {
+        return { records: [rec("p1")], cursor: undefined };
+      }
+      return { records: [] };
+    };
+
+    await runBackfill(db, new Indexer(db), DID_A, { fetchJson: fetchJsonForA, resolvePds });
+
+    // Assert: DID A's tombstone is pruned, DID B's tombstone still exists
+    const remainingTombstones = await db.select().from(tombstones);
+    expect(remainingTombstones.map((t) => t.atUri)).toEqual([tombstoneB]);
+  });
 });

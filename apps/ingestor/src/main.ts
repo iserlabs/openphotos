@@ -44,7 +44,7 @@ async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   });
 
   startHealthServer(indexer.stats, config.HEALTH_PORT);
-  startBackfillLoop(db, indexer);
+  const backfillTimer = startBackfillLoop(db, indexer); // graceful shutdown will clear this
   await consumer.start();
 }
 

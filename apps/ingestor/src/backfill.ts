@@ -89,8 +89,12 @@ async function applyOne(indexer: Indexer, ctx: Ctx, record: any) {
 
 export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000) {
   return setInterval(async () => {
-    const pending = await db.select().from(photographers).where(eq(photographers.backfillStatus, "pending"));
-    for (const p of pending) await runBackfill(db, indexer, p.did);
+    try {
+      const pending = await db.select().from(photographers).where(eq(photographers.backfillStatus, "pending"));
+      for (const p of pending) await runBackfill(db, indexer, p.did);
+    } catch (err) {
+      console.error("backfill loop: tick failed, will retry next interval", err);
+    }
   }, intervalMs);
 }
 
