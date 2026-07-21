@@ -352,6 +352,7 @@ export async function feedPage(db: Db, opts: { limit: number; cursor?: string; d
 export * from "./schema.js";
 export * from "./client.js";
 export * from "./feed.js";
+export * from "./test-db.js"; // downstream task tests import createTestDb from the barrel
 ```
 Delete `packages/db/src/smoke.test.ts`.
 
