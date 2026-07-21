@@ -1549,7 +1549,7 @@ Run: `pnpm --filter web test` (add vitest config to web) — Expected: FAIL.
 import { or, eq, and } from "drizzle-orm";
 import sharp from "sharp";
 import { photos, photographers, type Db } from "@luminance/db";
-import { resolvePdsEndpoint, assertPublicHttps } from "@luminance/atproto";
+import { resolvePdsEndpoint, safeFetch } from "@luminance/atproto";
 
 export const PRESETS = { thumb: 512, feed: 1024, full: 2048 } as const;
 export type Preset = keyof typeof PRESETS;
@@ -1559,8 +1559,8 @@ interface Deps { fetchBlob?: (did: string, cid: string) => Promise<Buffer> }
 async function defaultFetchBlob(did: string, cid: string): Promise<Buffer> {
   const pds = await resolvePdsEndpoint(did);
   const url = `${pds}/xrpc/com.atproto.sync.getBlob?did=${encodeURIComponent(did)}&cid=${encodeURIComponent(cid)}`;
-  await assertPublicHttps(url);
-  const res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(15_000) });
+  // safeFetch = SSRF guard + DNS pinned through the guarded agent (TOCTOU-closed)
+  const res = await safeFetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`getBlob ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
