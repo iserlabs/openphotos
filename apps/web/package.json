@@ -13,6 +13,8 @@
     "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "sharp": "^0.34.4",
+    "drizzle-orm": "^0.45.2",
     "@luminance/db": "workspace:*",
     "@luminance/atproto": "workspace:*",
     "@luminance/lexicons": "workspace:*"
