@@ -1,0 +1,14 @@
+{
+  "name": "@luminance/lexicons",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atproto/lexicon": "^0.7.7"
+  }
+}
