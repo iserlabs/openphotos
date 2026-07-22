@@ -9,7 +9,7 @@ import { getSession } from "@/lib/session";
 import {
   setHiddenForDid,
   deregisterDid,
-  completeRegistration,
+  updateSourceToggles,
   adminTakedown as adminTakedownRow,
 } from "@/lib/registration";
 
@@ -32,8 +32,10 @@ export async function setPhotoHidden(formData: FormData) {
 }
 
 /**
- * Update which sources are indexed. Re-runs `completeRegistration` (upsert) with
- * the existing handle, which also re-arms the backfill so the change is applied.
+ * Update which sources are indexed. Writes ONLY the two toggle columns (never
+ * `status`, so it can't implicitly reactivate a deregistered account) and
+ * re-arms the backfill. Rows for a disabled source are purged in
+ * `updateSourceToggles`.
  */
 export async function updateSources(formData: FormData) {
   const session = await getSession();
@@ -41,14 +43,14 @@ export async function updateSources(formData: FormData) {
 
   const db = getDb();
   const [p] = await db
-    .select({ handle: photographers.handle })
+    .select({ did: photographers.did })
     .from(photographers)
     .where(eq(photographers.did, session.did));
   if (!p) redirect("/register");
 
   const includeBsky = formData.get("includeBsky") != null;
   const includeGrain = formData.get("includeGrain") != null;
-  await completeRegistration(db, { did: session.did, handle: p.handle, includeBsky, includeGrain });
+  await updateSourceToggles(db, session.did, { includeBsky, includeGrain });
   revalidatePath("/settings");
 }
 

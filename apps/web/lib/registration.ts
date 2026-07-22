@@ -1,11 +1,50 @@
-import { and, eq } from "drizzle-orm";
-import { photographers, photos, photoOverrides, type Db } from "@luminance/db";
+import { and, eq, inArray, like } from "drizzle-orm";
+import { photographers, photos, photoOverrides, series, seriesPhotos, type Db } from "@luminance/db";
+
+/**
+ * Grain galleries are the only `series` rows sourced from a toggle-able source.
+ * Their at-uri is `at://{did}/social.grain.gallery/{rkey}` — the trailing slash
+ * after the NSID keeps this from also matching `social.grain.gallery.item`.
+ */
+const GRAIN_GALLERY_ATURI_LIKE = "%/social.grain.gallery/%";
+
+/**
+ * Drop already-indexed rows for any source the photographer has turned off, so
+ * disabling a source deletes its content instead of merely halting new ingest
+ * (consent must apply retroactively). Callers set `backfillStatus:'pending'`
+ * separately when a source is re-enabled, which re-scans it. The photos index
+ * is rebuildable, so deleting here is safe.
+ */
+async function cleanupToggledOffSources(
+  db: Db,
+  did: string,
+  o: { includeBsky: boolean; includeGrain: boolean },
+) {
+  if (!o.includeBsky) {
+    await db.delete(photos).where(and(eq(photos.did, did), eq(photos.source, "bsky")));
+  }
+  if (!o.includeGrain) {
+    await db.delete(photos).where(and(eq(photos.did, did), eq(photos.source, "grain")));
+    // Grain-sourced series are galleries; delete them and their membership rows.
+    const grainSeries = await db
+      .select({ atUri: series.atUri })
+      .from(series)
+      .where(and(eq(series.did, did), like(series.atUri, GRAIN_GALLERY_ATURI_LIKE)));
+    if (grainSeries.length) {
+      const uris = grainSeries.map((s) => s.atUri);
+      await db.delete(seriesPhotos).where(inArray(seriesPhotos.seriesUri, uris));
+      await db.delete(series).where(inArray(series.atUri, uris));
+    }
+  }
+}
 
 /**
  * Upsert a photographer as `active` with a `pending` backfill. The ingestor's
  * poll picks up `backfillStatus:'pending'` rows automatically, so registration
- * (and later source-toggle changes) only need to write this row. Re-registering
- * an existing DID updates the handle + toggles in place instead of duplicating.
+ * only needs to write this row. Re-registering an existing DID updates the
+ * handle + toggles in place instead of duplicating. This is an explicit
+ * user-consent flow (/register/sources), so it may reactivate — but any source
+ * turned off here still has its existing rows purged.
  */
 export async function completeRegistration(
   db: Db,
@@ -31,6 +70,26 @@ export async function completeRegistration(
         backfillStatus: "pending",
       },
     });
+  await cleanupToggledOffSources(db, o.did, o);
+}
+
+/**
+ * Update ONLY the two source toggles for an already-registered photographer
+ * (settings flow). Never touches `status` — so it can't implicitly reactivate a
+ * `deregistered`/`pending_review` account the way an upsert would. Re-arms the
+ * backfill so a re-enabled source gets rescanned, and purges rows for any source
+ * turned off.
+ */
+export async function updateSourceToggles(
+  db: Db,
+  did: string,
+  o: { includeBsky: boolean; includeGrain: boolean },
+) {
+  await db
+    .update(photographers)
+    .set({ includeBsky: o.includeBsky, includeGrain: o.includeGrain, backfillStatus: "pending" })
+    .where(eq(photographers.did, did));
+  await cleanupToggledOffSources(db, did, o);
 }
 
 /**
