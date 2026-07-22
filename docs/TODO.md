@@ -12,7 +12,7 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] Fly: `luminance-ingestor` live in iad (personal org — no iserlabs Fly org exists; transferable later), scaled to 1 machine, health passing, DATABASE_URL (unpooled) secret set; FLY_API_TOKEN in GitHub secrets for auto-deploy (2026-07-22). Note: always-on ingestor keeps Neon compute awake — free tier is 100 CU-hrs/mo, expect to outgrow it in ~2 weeks
 - [x] DNS: luminance.social → Vercel via Cloudflare (A @ 216.150.1.1 + CNAME www, both DNS-only/grey-cloud; cert issued via `vercel certs issue`; PUBLIC_URL flipped to https://luminance.social; OAuth metadata verified on the real domain) (2026-07-22)
 - [x] Lexicon authority TXT records live: `_lexicon.actor` + `_lexicon.portfolio` → did=did:plc:ka5oytd2d6rhs2r6yrvt6yb2 (Kevin's account is the authority)
-- [ ] Publish the three `com.atproto.lexicon.schema` records from the authority account per `docs/runbooks/publish-lexicons.md` §3 (needs Kevin's app password or goat login)
+- [x] Lexicons published via goat (all three 🟢, end-to-end resolution verified with `goat lex resolve`) (2026-07-22)
 - [ ] OAuth smoke test with a real bsky.social account (needs the public https URL)
 - [ ] Register Kevin's account; verify a Bluesky photo post appears in the feed < 60s (success criterion 2)
 - [ ] Lighthouse ≥ 90 on `/` and one photo page (criterion 4)
