@@ -189,3 +189,24 @@ describe("reconciliation (PDS truth diff)", () => {
     expect(rows.map((r) => r.itemUri)).toEqual([keepItem]);
   });
 });
+
+describe("periodic reconciliation", () => {
+  it("re-arms active photographers after the reconcile interval elapses", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos", backfillStatus: "complete" });
+    let walked = 0;
+    const counting = async (url: string) => { walked++; return { records: [] }; };
+    const origResolve = resolvePds;
+    const timer = startBackfillLoop(db, new Indexer(db), 40, 80);
+    // monkey-patch not available — instead assert via status transitions:
+    await new Promise((r) => setTimeout(r, 300));
+    clearInterval(timer);
+    const [p] = await db.select().from(photographers);
+    // after >80ms the loop re-armed it to pending; runBackfill then ran against
+    // the REAL resolver (which fails fast in tests) -> status lands on 'failed'
+    // or, if a tick raced, 'pending'/'running'. The one state that proves the
+    // re-arm never happened is an untouched 'complete' with zero transitions.
+    expect(p.backfillStatus).not.toBe("complete");
+    void counting; void walked; void origResolve;
+  });
+});

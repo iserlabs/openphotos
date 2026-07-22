@@ -138,9 +138,18 @@ async function applyOne(indexer: Indexer, ctx: Ctx, record: any) {
   }
 }
 
-export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000) {
+export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000, reconcileIntervalMs = 60 * 60 * 1000) {
+  // Periodic reconciliation: the firehose is best-effort delivery (observed in
+  // production: Jetstream lagging a PDS by 30+ min, dropping deletes/creates).
+  // Re-arming every active photographer hourly bounds staleness at
+  // ~reconcileIntervalMs regardless of upstream health — PDS truth wins.
+  let lastReconcile = Date.now();
   return setInterval(async () => {
     try {
+      if (Date.now() - lastReconcile >= reconcileIntervalMs) {
+        lastReconcile = Date.now();
+        await db.update(photographers).set({ backfillStatus: "pending" }).where(eq(photographers.status, "active"));
+      }
       const pending = await db.select().from(photographers)
         .where(and(eq(photographers.backfillStatus, "pending"), ne(photographers.status, "deregistered")));
       for (const p of pending) await runBackfill(db, indexer, p.did);
