@@ -22,10 +22,19 @@ const EXIF_FIELDS: { key: "camera" | "lens" | "focalLength" | "fNumber" | "shutt
   { key: "iso", label: "ISO" },
 ];
 
+// Next 16 delivers PAGE params percent-encoded (`did%3Aplc%3A…`) even when the
+// URL holds a literal `:` — verified empirically; route handlers (e.g. /img)
+// get them decoded. Decode exactly once, tolerating malformed input.
+function decodeParam(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 async function load(db: Db, { did, collection, rkey }: Params) {
-  // `did` arrives URL-decoded from the Next router; decoding again would
-  // corrupt did:web ports (%3A).
-  const atUri = buildAtUri(did, collection, rkey);
+  const atUri = buildAtUri(decodeParam(did), decodeParam(collection), decodeParam(rkey));
   return getPhotoRecord(db, atUri);
 }
 
@@ -58,9 +67,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
   const rec = await load(getDb(), p);
   if (!rec) notFound();
   const { items, photographer } = rec;
-  // `did` arrives URL-decoded from the Next router; decoding again would
-  // corrupt did:web ports (%3A).
-  const decodedDid = p.did;
+  const decodedDid = decodeParam(p.did);
 
   const sourceHref =
     items[0].source === "bsky"
