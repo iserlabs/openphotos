@@ -13,7 +13,12 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - name: lexicon drift check
-        run: git diff --exit-code packages/lexicons packages/db/migrations
+        # Stage first so untracked generated files (e.g. a new lexicon or
+        # migration that was produced but never committed) also fail the check,
+        # not just modifications to already-tracked files.
+        run: |
+          git add -A -- packages/lexicons packages/db/migrations
+          git diff --cached --exit-code -- packages/lexicons packages/db/migrations
       # - name: run db migrations
       #   run: pnpm --filter db exec drizzle-kit migrate
       #   env:

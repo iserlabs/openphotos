@@ -1,11 +1,17 @@
 name: deploy-ingestor
 on:
-  push:
+  # Gate the Fly deploy on a green CI run instead of firing directly on push:
+  # a broken build/test must never reach production.
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "apps/ingestor/**"
-      - "packages/**"
-      - "pnpm-lock.yaml"
+
+# NOTE: workflow_run triggers do NOT support a `paths:` filter, so the deploy can
+# no longer be scoped to apps/ingestor/**, packages/**, pnpm-lock.yaml changes.
+# It now runs on every successful CI on main. A Fly redeploy with an unchanged
+# image is effectively a no-op, so paying that cost on unrelated green CI runs is
+# acceptable in exchange for the CI gate.
 
 concurrency:
   group: deploy-ingestor
@@ -14,9 +20,11 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Only deploy when the CI workflow that triggered this actually succeeded.
+    if: github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@v1.5
       - run: flyctl deploy --remote-only --config apps/ingestor/fly.toml --dockerfile apps/ingestor/Dockerfile
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
