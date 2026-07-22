@@ -1,0 +1,3 @@
+{
+  "buildCommand": "cd ../.. && pnpm --filter web... build"
+}
