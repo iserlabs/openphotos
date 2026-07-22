@@ -92,6 +92,43 @@ describe("JetstreamConsumer", () => {
     }
   }, 8000);
 
+  it("never opens a socket while the registry is empty", async () => {
+    const db = await createTestDb();
+    let connCount = 0;
+    const url = fakeJetstream(() => { connCount++; });
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: [],
+      getDids: async () => [], // empty registry
+      onEvent: async () => {},
+      onStaleCursor: async () => {},
+      didPollIntervalMs: 50,
+    });
+    await consumer.start();
+    await new Promise((r) => setTimeout(r, 200)); // several poll ticks
+    expect(connCount).toBe(0); // no unfiltered firehose ever opened
+  });
+
+  it("connects on the next did-poll once the registry becomes non-empty", async () => {
+    const db = await createTestDb();
+    let connCount = 0;
+    const url = fakeJetstream(() => { connCount++; });
+    let dids: string[] = [];
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: [],
+      getDids: async () => dids,
+      onEvent: async () => {},
+      onStaleCursor: async () => {},
+      didPollIntervalMs: 50,
+    });
+    await consumer.start();
+    await new Promise((r) => setTimeout(r, 120));
+    expect(connCount).toBe(0); // still empty -> no socket
+
+    dids = ["did:plc:kevin"]; // a photographer registers
+    await new Promise((r) => setTimeout(r, 300)); // let a poll tick fire + socket open
+    expect(connCount).toBe(1); // poll noticed the non-empty set and connected
+  });
+
   it("stop() cancels a pending reconnect backoff so no new connection opens afterward", async () => {
     const db = await createTestDb();
     let connCount = 0;
