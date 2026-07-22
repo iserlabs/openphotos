@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/main.js",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -17,6 +18,8 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@atproto/api": "^0.20.31",
+    "@atproto/dev-env": "^0.5.36",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.5.13"
   }
