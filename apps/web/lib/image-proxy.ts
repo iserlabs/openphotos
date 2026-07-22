@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import sharp from "sharp";
-import { photos, photographers, type Db } from "@luminance/db";
+import { photos, photographers, photoOverrides, type Db } from "@luminance/db";
 import { resolvePdsEndpoint, safeFetch } from "@luminance/atproto";
 
 export const PRESETS = { thumb: 512, feed: 1024, full: 2048 } as const;
@@ -28,12 +28,22 @@ export async function proxyImage(
   if (!width) return { status: 400, cacheControl: "public, max-age=3600" };
 
   // Allowlist: only blobs the index references may be proxied (spec §11).
-  // Check photos.blobCid (scoped to did) first, then photographers.avatarCid
-  // (also scoped to did) — 404 before any upstream fetch if neither matches.
+  // Both branches join photographers and exclude removed accounts
+  // ('deregistered'/'takedown') so a moderation/opt-out action reaches the CDN
+  // layer too; the photo branch also left-joins overrides to drop taken-down
+  // photos. 404 before any upstream fetch if neither matches.
+  const LIVE_STATUSES = notInArray(photographers.status, ["deregistered", "takedown"]);
   const [photoHit] = await db
     .select({ cid: photos.blobCid })
     .from(photos)
-    .where(and(eq(photos.blobCid, req.cid), eq(photos.did, req.did)))
+    .innerJoin(photographers, eq(photos.did, photographers.did))
+    .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
+    .where(and(
+      eq(photos.blobCid, req.cid),
+      eq(photos.did, req.did),
+      LIVE_STATUSES,
+      sql`coalesce(${photoOverrides.takedown}, false) = false`,
+    ))
     .limit(1);
 
   let allowed = Boolean(photoHit);
@@ -41,7 +51,7 @@ export async function proxyImage(
     const [avatarHit] = await db
       .select({ cid: photographers.avatarCid })
       .from(photographers)
-      .where(and(eq(photographers.avatarCid, req.cid), eq(photographers.did, req.did)))
+      .where(and(eq(photographers.avatarCid, req.cid), eq(photographers.did, req.did), LIVE_STATUSES))
       .limit(1);
     allowed = Boolean(avatarHit);
   }

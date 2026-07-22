@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers } from "@luminance/db";
+import { createTestDb, photos, photographers, photoOverrides } from "@luminance/db";
 import { proxyImage } from "./image-proxy";
 
 const seed = async (db: any) => {
@@ -50,5 +50,23 @@ describe("image proxy", () => {
     const db = await createTestDb(); await seed(db);
     const res = await proxyImage(db, { did: "did:plc:a", cid: "bafk-photo", preset: "constructor" as any, accept: "" });
     expect(res.status).toBe(400);
+  });
+  it("404s a taken-down photo's blob before any fetch", async () => {
+    const db = await createTestDb(); await seed(db);
+    await db.insert(photoOverrides).values({ atUri: "at://did:plc:a/c/1", mediaIndex: 0, takedown: true });
+    let fetched = false;
+    const res = await proxyImage(db, { did: "did:plc:a", cid: "bafk-photo", preset: "feed", accept: "image/webp" },
+      { fetchBlob: async () => { fetched = true; return Buffer.alloc(0); } });
+    expect(res.status).toBe(404);
+    expect(fetched).toBe(false);
+  });
+  it("404s a deregistered photographer's avatar before any fetch", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: "did:plc:g", handle: "gone.photos", avatarCid: "bafk-gone-avatar", status: "deregistered" });
+    let fetched = false;
+    const res = await proxyImage(db, { did: "did:plc:g", cid: "bafk-gone-avatar", preset: "thumb", accept: "" },
+      { fetchBlob: async () => { fetched = true; return Buffer.alloc(0); } });
+    expect(res.status).toBe(404);
+    expect(fetched).toBe(false);
   });
 });
