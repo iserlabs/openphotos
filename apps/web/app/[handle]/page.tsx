@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq } from "drizzle-orm";
-import { feedPage, photos, series as seriesTable } from "@luminance/db";
+import { and, eq, sql } from "drizzle-orm";
+import { feedPage, photos, photoOverrides, series as seriesTable } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getPhotographerByHandle, splitAtUri } from "@/lib/queries";
@@ -57,11 +57,14 @@ export default async function ProfilePage({
       .select({
         atUri: seriesTable.atUri,
         title: seriesTable.title,
-        coverBlobCid: photos.blobCid,
-        coverDid: photos.did,
+        // Suppress the cover thumbnail when it's hidden/taken-down, but keep the
+        // series in the shelf (hence CASE rather than a WHERE filter).
+        coverBlobCid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.blobCid} end`,
+        coverDid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.did} end`,
       })
       .from(seriesTable)
       .leftJoin(photos, and(eq(photos.atUri, seriesTable.coverPhotoUri), eq(photos.mediaIndex, 0)))
+      .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
       .where(eq(seriesTable.did, photographer.did)),
   ]);
 

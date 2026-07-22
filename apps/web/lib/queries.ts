@@ -40,7 +40,12 @@ export async function getSeries(db: Db, atUri: string) {
   const items = await db.select({ photo: photos })
     .from(seriesPhotos)
     .innerJoin(photos, and(eq(photos.atUri, seriesPhotos.photoUri), eq(photos.mediaIndex, sql`0`)))
-    .where(eq(seriesPhotos.seriesUri, atUri))
+    .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
+    .where(and(
+      eq(seriesPhotos.seriesUri, atUri),
+      sql`coalesce(${photoOverrides.hidden}, false) = false`,
+      sql`coalesce(${photoOverrides.takedown}, false) = false`,
+    ))
     .orderBy(asc(seriesPhotos.position));
   return { series: s, items: items.map((i) => i.photo) };
 }

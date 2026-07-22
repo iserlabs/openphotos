@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers, photoOverrides } from "@luminance/db";
-import { getPhotoRecord, getPhotographerByHandle } from "./queries";
+import { createTestDb, photos, photographers, photoOverrides, series, seriesPhotos } from "@luminance/db";
+import { getPhotoRecord, getPhotographerByHandle, getSeries } from "./queries";
 
 describe("queries", () => {
   it("getPhotoRecord returns all media rows of a multi-image post, minus taken-down ones", async () => {
@@ -16,5 +16,20 @@ describe("queries", () => {
     const db = await createTestDb();
     await db.insert(photographers).values({ did: "did:plc:a", handle: "gone.photos", status: "deregistered" });
     expect(await getPhotographerByHandle(db, "gone.photos")).toBeNull();
+  });
+  it("getSeries omits hidden and taken-down photos from its items", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: "did:plc:a", handle: "klee.photos" });
+    const seriesUri = "at://did:plc:a/social.luminance.portfolio.series/s1";
+    const uri = (n: number) => `at://did:plc:a/social.luminance.portfolio.photo/${n}`;
+    await db.insert(photos).values([1, 2, 3].map((n) => ({ atUri: uri(n), mediaIndex: 0, did: "did:plc:a", source: "luminance" as const, recordCid: "r", blobCid: `b${n}`, sortAt: new Date() })));
+    await db.insert(series).values({ atUri: seriesUri, did: "did:plc:a", title: "S" });
+    await db.insert(seriesPhotos).values([1, 2, 3].map((n) => ({ seriesUri, photoUri: uri(n), position: n })));
+    await db.insert(photoOverrides).values([
+      { atUri: uri(1), mediaIndex: 0, hidden: true },
+      { atUri: uri(2), mediaIndex: 0, takedown: true },
+    ]);
+    const found = await getSeries(db, seriesUri);
+    expect(found!.items.map((i) => i.atUri)).toEqual([uri(3)]);
   });
 });
