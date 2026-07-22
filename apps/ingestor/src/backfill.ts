@@ -1,5 +1,5 @@
-import { and, eq, like, ne } from "drizzle-orm";
-import { photographers, tombstones, type Db } from "@luminance/db";
+import { and, eq, inArray, like, ne, notInArray } from "drizzle-orm";
+import { photographers, photos, series, seriesPhotos, tombstones, type Db } from "@luminance/db";
 import {
   resolvePdsEndpoint as realResolve, safeJsonFetch, mapLuminancePhoto, mapBskyPost,
   mapGrainRecord, GRAIN_COLLECTIONS, type Ctx,
@@ -41,6 +41,7 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
     }
     for (const collection of collections) {
       let cursor: string | undefined; let count = 0;
+      const seen = new Set<string>();
       do {
         const u = new URL(`${pds}/xrpc/com.atproto.repo.listRecords`);
         u.searchParams.set("repo", did); u.searchParams.set("collection", collection); u.searchParams.set("limit", "100");
@@ -52,6 +53,7 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
         }
         for (const r of page.records ?? []) {
           const rkey = String(r.uri).split("/").pop()!;
+          seen.add(String(r.uri));
           const ctx: Ctx = { did, collection, rkey, cid: r.cid, indexedAt: new Date() };
           await applyOne(indexer, ctx, r.value);
           count++;
@@ -59,6 +61,13 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
         cursor = page.cursor;
         await sleep(opts.retryDelayMs ?? 250); // throttle (spec §9)
       } while (cursor && count < cap);
+      // Reconciliation: the walked repo is the source of truth. Rows whose
+      // records vanished upstream (delete events the firehose never delivered
+      // — observed in production: Jetstream lagging a PDS by 30+ minutes) are
+      // removed here. Only when the walk saw the WHOLE collection: a
+      // cap-truncated walk proves nothing about unseen records.
+      const truncated = Boolean(cursor) && count >= cap;
+      if (!truncated) await reconcileCollection(db, did, collection, seen);
     }
     await db.delete(tombstones).where(like(tombstones.atUri, `at://${did}/%`)); // prune only this DID's tombstones — concurrent backfills of other DIDs must keep theirs (spec §9)
     await db.update(photographers).set({ backfillStatus: "complete" }).where(eq(photographers.did, did));
@@ -66,6 +75,48 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
     console.error("backfill failed", { did, err: String(err) });
     await db.update(photographers).set({ backfillStatus: "failed" }).where(eq(photographers.did, did));
   }
+}
+
+const PHOTO_SOURCE_BY_COLLECTION: Record<string, "luminance" | "bsky" | "grain"> = {
+  [LUMINANCE_PHOTO]: "luminance",
+  [BSKY_POST]: "bsky",
+  "social.grain.photo": "grain",
+};
+
+async function reconcileCollection(db: Db, did: string, collection: string, seen: Set<string>) {
+  const uris = [...seen];
+  const source = PHOTO_SOURCE_BY_COLLECTION[collection];
+  if (source) {
+    const where = uris.length
+      ? and(eq(photos.did, did), eq(photos.source, source), notInArray(photos.atUri, uris))
+      : and(eq(photos.did, did), eq(photos.source, source));
+    await db.delete(photos).where(where);
+    return;
+  }
+  if (collection === LUMINANCE_SERIES || collection === "social.grain.gallery") {
+    const pattern = `at://${did}/${collection}/%`;
+    const where = uris.length
+      ? and(eq(series.did, did), like(series.atUri, pattern), notInArray(series.atUri, uris))
+      : and(eq(series.did, did), like(series.atUri, pattern));
+    const stale = await db.select({ atUri: series.atUri }).from(series).where(where);
+    if (stale.length) {
+      const staleUris = stale.map((s) => s.atUri);
+      await db.transaction(async (tx) => {
+        await tx.delete(seriesPhotos).where(inArray(seriesPhotos.seriesUri, staleUris));
+        await tx.delete(series).where(inArray(series.atUri, staleUris));
+      });
+    }
+    return;
+  }
+  if (collection === "social.grain.gallery.item") {
+    const pattern = `at://${did}/${collection}/%`;
+    const where = uris.length
+      ? and(like(seriesPhotos.itemUri, pattern), notInArray(seriesPhotos.itemUri, uris))
+      : like(seriesPhotos.itemUri, pattern);
+    await db.delete(seriesPhotos).where(where);
+    return;
+  }
+  // profile collections: upsert-only, nothing to reconcile
 }
 
 async function applyOne(indexer: Indexer, ctx: Ctx, record: any) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers, tombstones } from "@luminance/db";
+import { createTestDb, photos, photographers, tombstones, seriesPhotos } from "@luminance/db";
 import { LUMINANCE_PHOTO, BSKY_POST } from "@luminance/lexicons";
 import { Indexer } from "./indexer.js";
 import { runBackfill, startBackfillLoop } from "./backfill.js";
@@ -131,5 +131,61 @@ describe("runBackfill", () => {
     // Assert: DID A's tombstone is pruned, DID B's tombstone still exists
     const remainingTombstones = await db.select().from(tombstones);
     expect(remainingTombstones.map((t) => t.atUri)).toEqual([tombstoneB]);
+  });
+});
+
+describe("reconciliation (PDS truth diff)", () => {
+  it("removes indexed rows whose records no longer exist in the repo", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
+    // p1 still in repo; p3 was deleted upstream and its event was never delivered
+    await db.insert(photos).values([
+      { atUri: rec("p1").uri, mediaIndex: 0, did: DID, source: "luminance", recordCid: "r", blobCid: "stale-b1", sortAt: new Date() },
+      { atUri: `at://${DID}/social.luminance.portfolio.photo/p3`, mediaIndex: 0, did: DID, source: "luminance", recordCid: "r", blobCid: "stale-b3", sortAt: new Date() },
+    ]);
+    await runBackfill(db, new Indexer(db), DID, { fetchJson, resolvePds });
+    const rows = await db.select().from(photos);
+    expect(rows.map((r) => r.atUri).sort()).toEqual([rec("p1").uri, rec("p2").uri].sort());
+  });
+
+  it("does NOT diff-delete when the walk was truncated by the cap", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
+    await db.insert(photos).values([
+      { atUri: `at://${DID}/social.luminance.portfolio.photo/p9`, mediaIndex: 0, did: DID, source: "luminance", recordCid: "r", blobCid: "b9", sortAt: new Date() },
+    ]);
+    const paged = async (url: string) => {
+      const u = new URL(url);
+      if (u.searchParams.get("collection") === "social.luminance.portfolio.photo") {
+        return u.searchParams.get("cursor")
+          ? { records: [rec("p2")], cursor: undefined }
+          : { records: [rec("p1")], cursor: "more" };
+      }
+      return { records: [] };
+    };
+    await runBackfill(db, new Indexer(db), DID, { fetchJson: paged, resolvePds, maxPerCollection: 1 });
+    const rows = await db.select().from(photos);
+    expect(rows.some((r) => r.atUri.endsWith("/p9"))).toBe(true); // stale row survives a capped walk
+  });
+
+  it("diff-deletes stale gallery.item membership rows by itemUri", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
+    const keepItem = `at://${DID}/social.grain.gallery.item/keep`;
+    const staleItem = `at://${DID}/social.grain.gallery.item/stale`;
+    await db.insert(seriesPhotos).values([
+      { seriesUri: `at://${DID}/social.grain.gallery/g1`, photoUri: `at://${DID}/social.grain.photo/a`, position: 0, itemUri: keepItem },
+      { seriesUri: `at://${DID}/social.grain.gallery/g1`, photoUri: `at://${DID}/social.grain.photo/b`, position: 1, itemUri: staleItem },
+    ]);
+    const withItems = async (url: string) => {
+      const u = new URL(url);
+      if (u.searchParams.get("collection") === "social.grain.gallery.item" && !u.searchParams.get("cursor")) {
+        return { records: [{ uri: keepItem, cid: "c", value: { $type: "social.grain.gallery.item", gallery: `at://${DID}/social.grain.gallery/g1`, item: `at://${DID}/social.grain.photo/a`, position: 0, createdAt: "2026-07-01T00:00:00Z" } }] };
+      }
+      return { records: [] };
+    };
+    await runBackfill(db, new Indexer(db), DID, { fetchJson: withItems, resolvePds });
+    const rows = await db.select().from(seriesPhotos);
+    expect(rows.map((r) => r.itemUri)).toEqual([keepItem]);
   });
 });
