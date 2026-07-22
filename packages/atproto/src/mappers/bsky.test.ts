@@ -21,3 +21,19 @@ describe("mapBskyPost", () => {
   it("skips posts without image embeds", () =>
     expect(mapBskyPost(ctx, { text: "hi", createdAt: "2026-01-01T00:00:00Z" })).toEqual([]));
 });
+
+import gallery from "./fixtures/bsky-post-gallery.json" with { type: "json" };
+
+describe("mapBskyPost gallery embeds (app.bsky.embed.gallery)", () => {
+  const gctx = { did: "did:plc:kevin", collection: "app.bsky.feed.post", rkey: "3mrap7bkyuc2t", cid: "bafyrec", indexedAt: new Date("2026-07-22T17:00:00Z") };
+  const guri = "at://did:plc:kevin/app.bsky.feed.post/3mrap7bkyuc2t";
+  it("maps one row per gallery item with mediaIndex + shared groupKey", () => {
+    const rows = mapBskyPost(gctx, gallery);
+    expect(rows).toHaveLength(10);
+    expect(rows.map((r) => r.mediaIndex)).toEqual([0,1,2,3,4,5,6,7,8,9]);
+    expect(new Set(rows.map((r) => r.atUri))).toEqual(new Set([guri]));
+    expect(rows.every((r) => r.groupKey === guri && r.source === "bsky")).toBe(true);
+    expect(rows[0].blobCid).toBe("bafkreicaipajd77wf53szr6kojxyabjzxspkorgbzizbdlyzdaq6zuokd4");
+    expect(rows[0].width).toBe(3400);
+  });
+});

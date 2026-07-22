@@ -1,0 +1,211 @@
+{
+  "text": "#photography #nikon #zf",
+  "$type": "app.bsky.feed.post",
+  "embed": {
+    "$type": "app.bsky.embed.gallery",
+    "items": [
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreicaipajd77wf53szr6kojxyabjzxspkorgbzizbdlyzdaq6zuokd4"
+          },
+          "size": 1943673,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 3400,
+          "height": 3400
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreieu3j6n62qpqvqma4y2d6vary2y3bx6cen3urxavx3kbyu4jtlp24"
+          },
+          "size": 1623032,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 1254,
+          "height": 1568
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreiasoozngysv37vmot26siptpuqdpa4fzsl6mzlryjakqrjakqirou"
+          },
+          "size": 1931107,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 3157,
+          "height": 3157
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreigkrw5zmqdmqscl4xkwsrl3kt4mkplpzl6gqgit5oyp65w6xbbspy"
+          },
+          "size": 1954018,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 3564,
+          "height": 3564
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreig7wkbamfma3654vq2ms6uqax37wrnuhq6hiotj5kwgq72crkkvtu"
+          },
+          "size": 1990183,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 3712,
+          "height": 3712
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreigsvynkqzvvf6odymmpiobix3cengjtsgnqlbatn2dm2hpn3ch6cy"
+          },
+          "size": 1803455,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 3200,
+          "height": 3999
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreigki7mghhlytumo72xs4oepmllcfv4ofwpyyygpf3jj3vgqsyen5u"
+          },
+          "size": 1956924,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 3553,
+          "height": 3553
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreib7kersleqi6xfre7iwljnit5ucfc6dmzslvwe4pbn2m6h45mryn4"
+          },
+          "size": 1994222,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 2499,
+          "height": 3124
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreih74oaibbb3dpzsmt6xoyi3r76osaq53h53ta4l2fd7v6bx5sfx5y"
+          },
+          "size": 1965846,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 2983,
+          "height": 2983
+        }
+      },
+      {
+        "alt": "",
+        "$type": "app.bsky.embed.gallery#image",
+        "image": {
+          "ref": {
+            "$link": "bafkreiaaycimsrzyba5ereolppr75ftxwhzqygkjjg3jkucimepjih5a5e"
+          },
+          "size": 1887539,
+          "$type": "blob",
+          "mimeType": "image/jpeg"
+        },
+        "aspectRatio": {
+          "width": 2888,
+          "height": 2888
+        }
+      }
+    ]
+  },
+  "langs": [
+    "en"
+  ],
+  "facets": [
+    {
+      "index": {
+        "byteEnd": 12,
+        "byteStart": 0
+      },
+      "features": [
+        {
+          "tag": "photography",
+          "$type": "app.bsky.richtext.facet#tag"
+        }
+      ]
+    },
+    {
+      "index": {
+        "byteEnd": 19,
+        "byteStart": 13
+      },
+      "features": [
+        {
+          "tag": "nikon",
+          "$type": "app.bsky.richtext.facet#tag"
+        }
+      ]
+    },
+    {
+      "index": {
+        "byteEnd": 23,
+        "byteStart": 20
+      },
+      "features": [
+        {
+          "tag": "zf",
+          "$type": "app.bsky.richtext.facet#tag"
+        }
+      ]
+    }
+  ],
+  "createdAt": "2026-07-22T16:04:14.529Z"
+}
