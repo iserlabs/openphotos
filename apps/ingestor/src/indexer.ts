@@ -26,7 +26,15 @@ export class Indexer {
       return;
     }
     if (evt.kind === "account") {
-      const status: "active" | "deactivated" | "takedown" =
+      // Account events are the PDS account lifecycle only — they move a
+      // photographer among {active, deactivated, takedown} and MUST NOT touch
+      // app-managed states: 'pending_review' (moderation hold) and
+      // 'deregistered' (opt-out) are never resurrected by an active:true event
+      // (nor pushed into 'deactivated', which would become a resurrection vector
+      // via a later active:true).
+      const LIFECYCLE = ["active", "deactivated", "takedown"] as const;
+      if (!(LIFECYCLE as readonly string[]).includes(ph.status)) return;
+      const status: (typeof LIFECYCLE)[number] =
         evt.account?.active ? "active" : (evt.account?.status === "takendown" ? "takedown" : "deactivated");
       await this.db.update(photographers).set({ status }).where(eq(photographers.did, evt.did));
       return;

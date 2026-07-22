@@ -74,6 +74,24 @@ describe("Indexer", () => {
     const [row] = await db.select().from(photographers);
     expect(row.status).toBe("deactivated");
   });
+  it("account-active event does not resurrect a pending_review photographer", async () => {
+    await db.update(photographers).set({ status: "pending_review" }).where(eq(photographers.did, DID));
+    await ix.handleEvent({ did: DID, time_us: 2, kind: "account", account: { active: true } });
+    const [row] = await db.select().from(photographers);
+    expect(row.status).toBe("pending_review");
+  });
+  it("account-active event does not resurrect a deregistered photographer", async () => {
+    await db.update(photographers).set({ status: "deregistered" }).where(eq(photographers.did, DID));
+    await ix.handleEvent({ did: DID, time_us: 2, kind: "account", account: { active: true } });
+    const [row] = await db.select().from(photographers);
+    expect(row.status).toBe("deregistered");
+  });
+  it("account-active event reactivates a PDS-deactivated photographer", async () => {
+    await db.update(photographers).set({ status: "deactivated" }).where(eq(photographers.did, DID));
+    await ix.handleEvent({ did: DID, time_us: 2, kind: "account", account: { active: true } });
+    const [row] = await db.select().from(photographers);
+    expect(row.status).toBe("active");
+  });
   it("identity event refreshes handle", async () => {
     await ix.handleEvent({ did: DID, time_us: 3, kind: "identity", identity: { handle: "new.example.com" } });
     const [row] = await db.select().from(photographers);
