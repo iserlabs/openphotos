@@ -13,10 +13,10 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] DNS: luminance.social → Vercel via Cloudflare (A @ 216.150.1.1 + CNAME www, both DNS-only/grey-cloud; cert issued via `vercel certs issue`; PUBLIC_URL flipped to https://luminance.social; OAuth metadata verified on the real domain) (2026-07-22)
 - [x] Lexicon authority TXT records live: `_lexicon.actor` + `_lexicon.portfolio` → did=did:plc:ka5oytd2d6rhs2r6yrvt6yb2 (Kevin's account is the authority)
 - [x] Lexicons published via goat (all three 🟢, end-to-end resolution verified with `goat lex resolve`) (2026-07-22)
-- [ ] OAuth smoke test with a real bsky.social account (needs the public https URL)
-- [ ] Register Kevin's account; verify a Bluesky photo post appears in the feed < 60s (success criterion 2)
-- [ ] Lighthouse ≥ 90 on `/` and one photo page (criterion 4)
-- [ ] Enable the commented-out migration step in `.github/workflows/ci.yml` once `DATABASE_URL` exists as a repo secret
+- [x] OAuth smoke test passed — Kevin registered via the live DPoP flow (2026-07-22)
+- [x] Kevin registered; backfill complete, 22 photos live on the feed + profile + photo pages (criterion 1 ✓). Live <60s post test (criterion 2): pending a fresh Bluesky post
+- [~] Lighthouse (criterion 4): CLS 0 / TBT 0 everywhere; desktop 84, mobile ~70 — LCP is image-bytes-bound on throttled mobile. Deep fix filed below (responsive renditions)
+- [x] CI migration step enabled and green (first in-CI migrate ran 2026-07-22; DATABASE_URL secret = unpooled)
 
 ## 2. Phase 2 spec — social layer (continue after launch)
 
@@ -26,6 +26,10 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [ ] Then phase 3 (publisher core + tooling — klee.photos as flagship) and phase 4 (full-service onboarding: account provisioning, DNS wizard, site sync)
 
 ## 3. Deferred fast-follows (filed during Foundation review; none block launch)
+
+- [ ] **Perf: responsive image renditions** — add a ~640px preset + srcset/sizes on grid tiles (mobile LCP is transfer-bound: 112-344KB avif at 1024px over throttled links); consider blur-up placeholders. Goal: mobile Lighthouse ≥ 90 (criterion 4)
+- [ ] **Cursor-lag alert false-positives** — with a quiet single-DID filter, no events = lag grows at wall-clock rate and the >300s alert fires though nothing is wrong; distinguish "no events to consume" from "falling behind"
+- [ ] **Next 16 params encoding regression test** — pages get percent-encoded params, route handlers decoded (bit us in prod: photo pages 404'd); the deferred Playwright suite must cover a photo-page navigation
 
 - [ ] Playwright E2E suite (feed render, per-photo hide, label blur, proxy headers) — spec §13 gap, plan defect
 - [ ] Jetstream skipped-event cursor gap (I6): a transiently-failed event is skipped permanently; reconnect-from-cursor on handler failure
