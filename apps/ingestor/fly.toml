@@ -1,0 +1,30 @@
+app = "luminance-ingestor"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HEALTH_PORT = "8080"
+
+# The ingestor is a long-running Jetstream (websocket) consumer, not a
+# request-driven web service — it must not be scaled to zero for lack of
+# HTTP traffic, so auto-stop is disabled and one machine always stays up.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

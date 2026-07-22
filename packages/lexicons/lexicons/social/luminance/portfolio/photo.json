@@ -1,0 +1,43 @@
+{
+  "lexicon": 1,
+  "id": "social.luminance.portfolio.photo",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A single portfolio photograph.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["image", "createdAt"],
+        "properties": {
+          "image": { "type": "blob", "accept": ["image/*"], "maxSize": 20971520 },
+          "aspectRatio": { "type": "ref", "ref": "#aspectRatio" },
+          "alt": { "type": "string", "maxGraphemes": 2000 },
+          "title": { "type": "string", "maxGraphemes": 200 },
+          "caption": { "type": "string", "maxGraphemes": 3000 },
+          "capturedAt": { "type": "string", "format": "datetime" },
+          "createdAt": { "type": "string", "format": "datetime" },
+          "exif": { "type": "ref", "ref": "#exif" },
+          "tags": { "type": "array", "maxLength": 10, "items": { "type": "string", "maxGraphemes": 40 } },
+          "license": { "type": "string", "maxGraphemes": 100 },
+          "labels": { "type": "union", "refs": ["com.atproto.label.defs#selfLabels"] }
+        }
+      }
+    },
+    "aspectRatio": {
+      "type": "object", "required": ["width", "height"],
+      "properties": { "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 } }
+    },
+    "exif": {
+      "type": "object",
+      "properties": {
+        "camera": { "type": "string", "maxGraphemes": 100 },
+        "lens": { "type": "string", "maxGraphemes": 100 },
+        "focalLength": { "type": "string", "maxGraphemes": 20 },
+        "fNumber": { "type": "string", "maxGraphemes": 10 },
+        "shutterSpeed": { "type": "string", "maxGraphemes": 20 },
+        "iso": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "text": "Look at this amazing photo!",
+  "createdAt": "2026-07-20T12:00:00Z",
+  "embed": {
+    "$type": "app.bsky.embed.recordWithMedia",
+    "record": {
+      "uri": "at://did:plc:originaluser/app.bsky.feed.post/xyz789",
+      "cid": "bafyrec789"
+    },
+    "media": {
+      "$type": "app.bsky.embed.images",
+      "images": [
+        {
+          "image": {
+            "$type": "blob",
+            "ref": {
+              "$link": "bafk1quoteimg"
+            },
+            "mimeType": "image/jpeg",
+            "size": 75000
+          },
+          "alt": "quote post image",
+          "aspectRatio": {
+            "width": 3,
+            "height": 2
+          }
+        }
+      ]
+    }
+  }
+}

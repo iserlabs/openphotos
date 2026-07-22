@@ -1,0 +1,26 @@
+{
+  "name": "ingestor",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@luminance/atproto": "workspace:*",
+    "@luminance/db": "workspace:*",
+    "@luminance/lexicons": "workspace:*",
+    "@sentry/node": "^10.67.0",
+    "drizzle-orm": "^0.45.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@atproto/api": "^0.20.31",
+    "@atproto/dev-env": "^0.5.36",
+    "@types/node": "^24.13.3",
+    "@types/ws": "^8.5.13"
+  }
+}

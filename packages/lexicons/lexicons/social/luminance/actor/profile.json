@@ -1,0 +1,20 @@
+{
+  "lexicon": 1,
+  "id": "social.luminance.actor.profile",
+  "defs": {
+    "main": {
+      "type": "record", "key": "literal:self",
+      "record": {
+        "type": "object",
+        "properties": {
+          "displayName": { "type": "string", "maxGraphemes": 100 },
+          "bio": { "type": "string", "maxGraphemes": 1000 },
+          "websiteUrl": { "type": "string", "format": "uri" },
+          "location": { "type": "string", "maxGraphemes": 100 },
+          "avatar": { "type": "blob", "accept": ["image/*"], "maxSize": 2097152 },
+          "disciplines": { "type": "array", "maxLength": 10, "items": { "type": "string", "maxGraphemes": 40 } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@luminance/atproto",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@luminance/db": "workspace:*",
+    "@luminance/lexicons": "workspace:*",
+    "ipaddr.js": "^2.4.0",
+    "undici": "^8.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3"
+  }
+}

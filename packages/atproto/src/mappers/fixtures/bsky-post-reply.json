@@ -1,0 +1,34 @@
+{
+  "text": "Nice photo!",
+  "createdAt": "2026-07-20T11:00:00Z",
+  "reply": {
+    "root": {
+      "uri": "at://did:plc:someuser/app.bsky.feed.post/abc123",
+      "cid": "bafyrec123"
+    },
+    "parent": {
+      "uri": "at://did:plc:someuser/app.bsky.feed.post/abc123",
+      "cid": "bafyrec123"
+    }
+  },
+  "embed": {
+    "$type": "app.bsky.embed.images",
+    "images": [
+      {
+        "image": {
+          "$type": "blob",
+          "ref": {
+            "$link": "bafk1replyimg"
+          },
+          "mimeType": "image/jpeg",
+          "size": 50000
+        },
+        "alt": "reply image",
+        "aspectRatio": {
+          "width": 3,
+          "height": 2
+        }
+      }
+    ]
+  }
+}
