@@ -7,7 +7,7 @@ _Last updated: 2026-07-21. Foundation is merged to main but nothing is deployed 
 Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 
 - [x] Create GitHub repo + push main — **iserlabs/luminance-social** (2026-07-22; CI green on main, Renovate auto-configured)
-- [ ] Provision Neon Postgres; run migrations (`DATABASE_URL=... pnpm --filter @luminance/db exec drizzle-kit migrate`)
+- [x] Neon Postgres provisioned via Vercel Marketplace (`luminance-db`, iad1, DATABASE prefix); migrations 0000+0001 applied; feed renders healthy empty state (2026-07-22). ADMIN_DIDS set to Kevin's DID (kevinleephotos.bsky.social)
 - [x] Vercel project linked — **iser-labs/luminance-social**, rootDirectory `apps/web`, live at https://luminance-social.vercel.app (2026-07-22). Env set: PUBLIC_URL, SESSION_SECRET, OAUTH_JWK_1 (prod+preview). Still needed: DATABASE_URL (after DB), ADMIN_DIDS (Kevin's DID)
 - [ ] Fly: `fly apps create luminance-ingestor`, set secrets, first deploy; add `FLY_API_TOKEN` to GitHub secrets
 - [ ] DNS: luminance.social → Vercel
