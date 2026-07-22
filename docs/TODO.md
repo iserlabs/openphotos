@@ -14,7 +14,7 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] Lexicon authority TXT records live: `_lexicon.actor` + `_lexicon.portfolio` → did=did:plc:ka5oytd2d6rhs2r6yrvt6yb2 (Kevin's account is the authority)
 - [x] Lexicons published via goat (all three 🟢, end-to-end resolution verified with `goat lex resolve`) (2026-07-22)
 - [x] OAuth smoke test passed — Kevin registered via the live DPoP flow (2026-07-22)
-- [x] Kevin registered; backfill complete, 22 photos live on the feed + profile + photo pages (criterion 1 ✓). Live <60s post test (criterion 2): pending a fresh Bluesky post
+- [x] Kevin registered; 32 photos live incl. the 10-image gallery post (criterion 1 ✓). NOTE: Bluesky's new `app.bsky.embed.gallery` embed silently bypassed the mapper — fixed with real-record fixture (9a2bdf1), indexed via re-backfill. Criterion 2 (<60s live): next fresh post is the true test — the transport was proven live (cursor tracked the event), only the mapper dropped it
 - [~] Lighthouse (criterion 4): CLS 0 / TBT 0 everywhere; desktop 84, mobile ~70 — LCP is image-bytes-bound on throttled mobile. Deep fix filed below (responsive renditions)
 - [x] CI migration step enabled and green (first in-CI migrate ran 2026-07-22; DATABASE_URL secret = unpooled)
 
