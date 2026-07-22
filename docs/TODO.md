@@ -14,7 +14,9 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] Lexicon authority TXT records live: `_lexicon.actor` + `_lexicon.portfolio` → did=did:plc:ka5oytd2d6rhs2r6yrvt6yb2 (Kevin's account is the authority)
 - [x] Lexicons published via goat (all three 🟢, end-to-end resolution verified with `goat lex resolve`) (2026-07-22)
 - [x] OAuth smoke test passed — Kevin registered via the live DPoP flow (2026-07-22)
-- [x] Kevin registered; 32 photos live incl. the 10-image gallery post (criterion 1 ✓). NOTE: Bluesky's new `app.bsky.embed.gallery` embed silently bypassed the mapper — fixed with real-record fixture (9a2bdf1), indexed via re-backfill. Criterion 2 (<60s live): next fresh post is the true test — the transport was proven live (cursor tracked the event), only the mapper dropped it
+- [x] Kevin registered; index converges with his repo (22 photos incl. the new 10-image gallery; deleted posts removed). Two incidents diagnosed + fixed on launch day:
+  1. Bluesky's new `app.bsky.embed.gallery` embed bypassed the mapper — fixed with a real-record fixture (9a2bdf1)
+  2. **Jetstream upstream lag**: Bluesky's own AppView indexed Kevin's post in 52s, but the event never reached the public Jetstream instances (verified by unfiltered stream scan) — his PDS's events reach Jetstream 30+ min late or not at all. OUR transport was correct. Mitigation shipped: PDS-truth reconciliation (backfill diff-deletes vanished records, 54aaa8f) + hourly automatic re-reconcile (9cc19ea). Staleness now bounded at ~1h worst-case regardless of firehose health; <60s (criterion 2) holds whenever upstream is healthy — re-verify on a healthy day with a fresh post
 - [~] Lighthouse (criterion 4): CLS 0 / TBT 0 everywhere; desktop 84, mobile ~70 — LCP is image-bytes-bound on throttled mobile. Deep fix filed below (responsive renditions)
 - [x] CI migration step enabled and green (first in-CI migrate ran 2026-07-22; DATABASE_URL secret = unpooled)
 
