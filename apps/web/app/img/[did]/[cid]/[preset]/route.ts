@@ -21,6 +21,9 @@ export async function GET(
     status: r.status,
     headers: {
       "Cache-Control": r.cacheControl,
+      // Responses are content-negotiated (avif/webp/jpeg by Accept) — any
+      // cache in front must key variants accordingly.
+      Vary: "Accept",
       ...(r.contentType ? { "Content-Type": r.contentType } : {}),
     },
   });

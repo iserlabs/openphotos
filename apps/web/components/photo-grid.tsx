@@ -38,7 +38,7 @@ export function PhotoGrid({ items }: { items: GridPhoto[] }) {
             width={p.width}
             height={p.height}
             sensitive={isSensitive(p.labels)}
-            priority={i < 4}
+            priority={i === 0}
           />
         );
       })}

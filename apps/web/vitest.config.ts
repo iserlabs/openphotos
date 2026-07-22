@@ -5,5 +5,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // PGlite-backed tests (createTestDb) cold-start WASM Postgres; CI runners
+    // routinely blow the default 5s on the first test of a file.
+    testTimeout: 20_000,
   },
 });
