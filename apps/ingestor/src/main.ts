@@ -1,5 +1,6 @@
-import { ne } from "drizzle-orm";
-import { createDb, photographers, type Db } from "@luminance/db";
+import { Sentry, sentryEnabled } from "./sentry.js"; // must be imported first: initializes Sentry before other modules load
+import { ne, eq } from "drizzle-orm";
+import { createDb, photographers, ingestCursors, type Db } from "@luminance/db";
 import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
 import { GRAIN_COLLECTIONS } from "@luminance/atproto";
 import { config } from "./config.js";
@@ -7,6 +8,11 @@ import { Indexer } from "./indexer.js";
 import { JetstreamConsumer } from "./jetstream.js";
 import { startHealthServer } from "./health.js";
 import { startBackfillLoop } from "./backfill.js";
+import { cursorLagSeconds } from "./cursor-lag.js";
+
+const CURSOR_LAG_CONNECTION_ID = "main"; // matches JetstreamConsumer's connectionId below
+const CURSOR_LAG_CHECK_INTERVAL_MS = 60_000;
+const CURSOR_LAG_ALERT_THRESHOLD_S = 300;
 
 const WANTED_COLLECTIONS = [
   LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS,
@@ -24,6 +30,30 @@ async function getDids(db: Db): Promise<string[]> {
 // backfill sweep for reconciliation (spec §9).
 async function onStaleCursor(db: Db): Promise<void> {
   await db.update(photographers).set({ backfillStatus: "pending" });
+}
+
+/**
+ * Reads the live-consumer cursor row and reports how far behind "now" it is.
+ * Always logs an info-level `cursor_lag_seconds=<n>` line; logs an error
+ * (and alerts Sentry, if enabled) once the lag crosses the alert threshold —
+ * a sign the Jetstream connection has stalled or is falling behind.
+ */
+async function checkCursorLag(db: Db): Promise<void> {
+  const [row] = await db.select().from(ingestCursors).where(eq(ingestCursors.connectionId, CURSOR_LAG_CONNECTION_ID));
+  if (!row) return; // no events consumed yet
+  const lagSeconds = cursorLagSeconds(row.timeUs, Date.now());
+  console.log(`cursor_lag_seconds=${lagSeconds}`);
+  if (lagSeconds > CURSOR_LAG_ALERT_THRESHOLD_S) {
+    const msg = `ingestor: cursor lag ${lagSeconds}s exceeds ${CURSOR_LAG_ALERT_THRESHOLD_S}s threshold`;
+    console.error(msg);
+    if (sentryEnabled) Sentry.captureMessage(msg, "error");
+  }
+}
+
+function startCursorLagMonitor(db: Db): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    void checkCursorLag(db).catch((err) => console.error("cursor-lag: check failed", err));
+  }, CURSOR_LAG_CHECK_INTERVAL_MS);
 }
 
 /**
@@ -45,6 +75,7 @@ async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
 
   startHealthServer(indexer.stats, config.HEALTH_PORT);
   const backfillTimer = startBackfillLoop(db, indexer); // graceful shutdown will clear this
+  const cursorLagTimer = startCursorLagMonitor(db); // graceful shutdown will clear this
   await consumer.start();
 }
 
