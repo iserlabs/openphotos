@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getPhotoRecord, isSensitive, buildAtUri } from "@/lib/queries";
+import { safeExternalHref } from "@/lib/safe-href";
 import { SensitiveImage } from "@/components/photo-card";
 import type { Db } from "@luminance/db";
 
@@ -22,7 +23,9 @@ const EXIF_FIELDS: { key: "camera" | "lens" | "focalLength" | "fNumber" | "shutt
 ];
 
 async function load(db: Db, { did, collection, rkey }: Params) {
-  const atUri = buildAtUri(decodeURIComponent(did), collection, rkey);
+  // `did` arrives URL-decoded from the Next router; decoding again would
+  // corrupt did:web ports (%3A).
+  const atUri = buildAtUri(did, collection, rkey);
   return getPhotoRecord(db, atUri);
 }
 
@@ -55,12 +58,14 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
   const rec = await load(getDb(), p);
   if (!rec) notFound();
   const { items, photographer } = rec;
-  const decodedDid = decodeURIComponent(p.did);
+  // `did` arrives URL-decoded from the Next router; decoding again would
+  // corrupt did:web ports (%3A).
+  const decodedDid = p.did;
 
   const sourceHref =
     items[0].source === "bsky"
       ? `https://bsky.app/profile/${decodedDid}/post/${p.rkey}`
-      : photographer.website;
+      : safeExternalHref(photographer.website);
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
@@ -72,7 +77,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
           <a
             href={sourceHref}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer nofollow"
             className="text-sm text-sky-400 hover:text-sky-300"
           >
             {items[0].source === "bsky" ? "View on Bluesky" : "Photographer's site"}

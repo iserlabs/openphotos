@@ -6,6 +6,7 @@ import { feedPage, photos, series as seriesTable } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getPhotographerByHandle, splitAtUri } from "@/lib/queries";
+import { safeExternalHref } from "@/lib/safe-href";
 import { PhotoGrid } from "@/components/photo-grid";
 
 // Live DB per request — profiles reflect current index/moderation state.
@@ -48,6 +49,8 @@ export default async function ProfilePage({
   const photographer = await getPhotographerByHandle(db, handle);
   if (!photographer) notFound();
 
+  const websiteHref = safeExternalHref(photographer.website);
+
   const [{ items }, seriesRows] = await Promise.all([
     feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did }),
     db
@@ -86,11 +89,11 @@ export default async function ProfilePage({
           {photographer.bio ? (
             <p className="mt-3 max-w-xl text-sm text-zinc-300">{photographer.bio}</p>
           ) : null}
-          {photographer.website ? (
+          {websiteHref ? (
             <a
-              href={photographer.website}
+              href={websiteHref}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer nofollow"
               className="mt-3 inline-block text-sm font-medium text-sky-400 hover:text-sky-300"
             >
               {photographer.website}

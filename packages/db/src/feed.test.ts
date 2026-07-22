@@ -31,4 +31,9 @@ describe("feedPage", () => {
     const page = await feedPage(db, { limit: 10 });
     expect(page.items.map((i) => i.blobCid)).toEqual(["b2"]);
   });
+  it("treats an undecodable cursor as no cursor instead of throwing", async () => {
+    await db.insert(photos).values([p(1), p(2), p(3)]);
+    const page = await feedPage(db, { limit: 10, cursor: "not-base64-json!!" });
+    expect(page.items.map((i) => i.blobCid)).toEqual(["b3", "b2", "b1"]);
+  });
 });

@@ -14,7 +14,16 @@ export function decodeCursor(c: string): { sortAt: Date; atUri: string; mediaInd
 
 export async function feedPage(db: Db, opts: { limit: number; cursor?: string; did?: string }) {
   const { limit } = opts;
-  const cur = opts.cursor ? decodeCursor(opts.cursor) : null;
+  let cur: { sortAt: Date; atUri: string; mediaIndex: number } | null = null;
+  if (opts.cursor) {
+    try {
+      cur = decodeCursor(opts.cursor);
+    } catch {
+      // Malformed/undecodable cursor (bad base64, corrupt JSON, tampered
+      // query param) — treat as "no cursor" instead of crashing the feed.
+      cur = null;
+    }
+  }
   const rows = await db
     .select({ photo: photos, handle: photographers.handle, displayName: photographers.displayName })
     .from(photos)

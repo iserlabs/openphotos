@@ -6,8 +6,10 @@ export async function GET(
   { params }: { params: Promise<{ did: string; cid: string; preset: string }> },
 ) {
   const { did, cid, preset } = await params;
+  // `did` arrives URL-decoded from the Next router; decoding again would
+  // corrupt did:web ports (%3A).
   const r = await proxyImage(getDb(), {
-    did: decodeURIComponent(did),
+    did,
     cid,
     preset: preset as Preset,
     accept: req.headers.get("accept") ?? "",
