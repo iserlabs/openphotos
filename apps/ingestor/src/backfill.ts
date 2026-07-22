@@ -1,4 +1,4 @@
-import { eq, like } from "drizzle-orm";
+import { and, eq, like, ne } from "drizzle-orm";
 import { photographers, tombstones, type Db } from "@luminance/db";
 import {
   resolvePdsEndpoint as realResolve, safeJsonFetch, mapLuminancePhoto, mapBskyPost,
@@ -90,7 +90,8 @@ async function applyOne(indexer: Indexer, ctx: Ctx, record: any) {
 export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000) {
   return setInterval(async () => {
     try {
-      const pending = await db.select().from(photographers).where(eq(photographers.backfillStatus, "pending"));
+      const pending = await db.select().from(photographers)
+        .where(and(eq(photographers.backfillStatus, "pending"), ne(photographers.status, "deregistered")));
       for (const p of pending) await runBackfill(db, indexer, p.did);
     } catch (err) {
       console.error("backfill loop: tick failed, will retry next interval", err);

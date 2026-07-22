@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createTestDb, photos, photographers, tombstones } from "@luminance/db";
 import { LUMINANCE_PHOTO, BSKY_POST } from "@luminance/lexicons";
 import { Indexer } from "./indexer.js";
-import { runBackfill } from "./backfill.js";
+import { runBackfill, startBackfillLoop } from "./backfill.js";
 
 const DID = "did:plc:kevin";
 const rec = (rkey: string) => ({
@@ -80,6 +80,22 @@ describe("runBackfill", () => {
     const rows = await db.select().from(photos);
     expect(rows).toHaveLength(1);
     expect(rows[0].source).toBe("luminance"); // no bsky rows made it in
+  });
+
+  it("the backfill loop skips a deregistered photographer even when marked pending", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos", status: "deregistered", backfillStatus: "pending" });
+    const timer = startBackfillLoop(db, new Indexer(db), 20);
+    try {
+      await new Promise((r) => setTimeout(r, 90)); // several ticks
+    } finally {
+      clearInterval(timer);
+    }
+    const [ph] = await db.select().from(photographers);
+    // runBackfill would have flipped 'pending' -> 'running' on its first line;
+    // still 'pending' proves the loop never picked it up (no PDS call either).
+    expect(ph.backfillStatus).toBe("pending");
+    expect(await db.select().from(photos)).toHaveLength(0);
   });
 
   it("multi-DID tombstone isolation: only prunes the backfilled DID's tombstones", async () => {

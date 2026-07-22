@@ -29,7 +29,9 @@ async function getDids(db: Db): Promise<string[]> {
 // trust the live stream alone, so force every photographer through a full
 // backfill sweep for reconciliation (spec §9).
 async function onStaleCursor(db: Db): Promise<void> {
-  await db.update(photographers).set({ backfillStatus: "pending" });
+  // 'deregistered' is a terminal opt-out — never re-arm its backfill, which
+  // would re-index a photographer who left (spec §3).
+  await db.update(photographers).set({ backfillStatus: "pending" }).where(ne(photographers.status, "deregistered"));
 }
 
 /**
