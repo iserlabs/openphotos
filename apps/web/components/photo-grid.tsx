@@ -26,7 +26,7 @@ export interface GridPhoto {
 export function PhotoGrid({ items }: { items: GridPhoto[] }) {
   return (
     <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
-      {items.map((p) => {
+      {items.map((p, i) => {
         const parts = splitAtUri(p.atUri);
         if (!parts) return null;
         return (
@@ -38,6 +38,7 @@ export function PhotoGrid({ items }: { items: GridPhoto[] }) {
             width={p.width}
             height={p.height}
             sensitive={isSensitive(p.labels)}
+            priority={i < 4}
           />
         );
       })}

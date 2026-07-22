@@ -51,6 +51,7 @@ export function PhotoCard({
   width,
   height,
   sensitive,
+  priority = false,
 }: {
   href: string;
   src: string;
@@ -58,6 +59,8 @@ export function PhotoCard({
   width: number | null;
   height: number | null;
   sensitive: boolean;
+  /** Above-the-fold LCP candidates: eager-load with a high fetch priority. */
+  priority?: boolean;
 }) {
   const [revealed, setRevealed] = useState(false);
 
@@ -69,7 +72,8 @@ export function PhotoCard({
         alt={alt}
         width={width ?? undefined}
         height={height ?? undefined}
-        loading="lazy"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
         className="h-full w-full object-cover"
       />
     </div>

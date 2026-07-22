@@ -118,7 +118,8 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
                     alt={photo.alt ?? ""}
                     width={photo.width ?? undefined}
                     height={photo.height ?? undefined}
-                    loading="lazy"
+                    loading={i === 0 ? "eager" : "lazy"}
+                    fetchPriority={i === 0 ? "high" : undefined}
                     className="h-full w-full object-contain"
                   />
                 </div>

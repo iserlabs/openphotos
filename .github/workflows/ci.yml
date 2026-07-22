@@ -19,11 +19,7 @@ jobs:
         run: |
           git add -A -- packages/lexicons packages/db/migrations
           git diff --cached --exit-code -- packages/lexicons packages/db/migrations
-      # - name: run db migrations
-      #   run: pnpm --filter db exec drizzle-kit migrate
-      #   env:
-      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      # Deferred: no DATABASE_URL secret exists yet for CI (production
-      # Postgres isn't provisioned). Once it does, uncomment this step so
-      # migrations run here, ahead of the Vercel Git-integration deploy that
-      # the same push triggers for the web app.
+      - name: run db migrations
+        run: pnpm --filter @luminance/db exec drizzle-kit migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
