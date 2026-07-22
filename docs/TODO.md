@@ -9,7 +9,7 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] Create GitHub repo + push main — **iserlabs/luminance-social** (2026-07-22; CI green on main, Renovate auto-configured)
 - [x] Neon Postgres provisioned via Vercel Marketplace (`luminance-db`, iad1, DATABASE prefix); migrations 0000+0001 applied; feed renders healthy empty state (2026-07-22). ADMIN_DIDS set to Kevin's DID (kevinleephotos.bsky.social)
 - [x] Vercel project linked — **iser-labs/luminance-social**, rootDirectory `apps/web`, live at https://luminance-social.vercel.app (2026-07-22). Env set: PUBLIC_URL, SESSION_SECRET, OAUTH_JWK_1 (prod+preview). Still needed: DATABASE_URL (after DB), ADMIN_DIDS (Kevin's DID)
-- [ ] Fly: `fly apps create luminance-ingestor`, set secrets, first deploy; add `FLY_API_TOKEN` to GitHub secrets
+- [x] Fly: `luminance-ingestor` live in iad (personal org — no iserlabs Fly org exists; transferable later), scaled to 1 machine, health passing, DATABASE_URL (unpooled) secret set; FLY_API_TOKEN in GitHub secrets for auto-deploy (2026-07-22). Note: always-on ingestor keeps Neon compute awake — free tier is 100 CU-hrs/mo, expect to outgrow it in ~2 weeks
 - [ ] DNS: luminance.social → Vercel
 - [ ] Publish lexicons per `docs/runbooks/publish-lexicons.md` (**two** TXT records: `_lexicon.portfolio.luminance.social` and `_lexicon.actor.luminance.social`)
 - [ ] OAuth smoke test with a real bsky.social account (needs the public https URL)
