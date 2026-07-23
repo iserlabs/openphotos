@@ -123,7 +123,7 @@ export const notifications = pgTable("notifications", {
   readAt: timestamp("read_at", { withTimezone: true }),
 }, (t) => [
   uniqueIndex("notifications_dedupe_idx").on(t.kind, t.subjectUri, t.actorDid, t.recipientDid),
-  index("notifications_recipient_idx").on(t.recipientDid, t.createdAt.desc()),
+  index("notifications_recipient_idx").on(t.recipientDid, t.id.desc()),
 ]);
 
 // ---- rebuildable cache (phase 2) ----

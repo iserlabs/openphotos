@@ -42,20 +42,14 @@ export async function engagementFor(db: Db, postUris: string[]): Promise<Map<str
     // after fetchedAt must apply both (net zero), and a row created before but
     // deleted after fetchedAt must apply only the delete (net -1).
     //
-    // The delete term is gated on `d.deletedAt` alone, NOT `d.deletedAt > fa`:
-    // the schema comment on `interactions` (and spec §3, "rows are pruned by
-    // the sweep once engagement.fetched_at > deleted_at") establishes that any
-    // soft-deleted row still present at query time is, by construction, a
-    // delete the last sweep hasn't absorbed yet — the pruning job (a
-    // different, later task) is what removes rows once they ARE absorbed.
-    // Comparing deletedAt to fa here is both redundant and wrong: deletedAt is
-    // set via `new Date()` at soft-delete time (real wall-clock "now"), while
-    // a test/production fetchedAt can legitimately be stamped slightly into
-    // the future relative to that same instant (to safely be after an
-    // earlier createdAt) — an `deletedAt > fa` check would then spuriously
-    // suppress a delete that must still be subtracted.
+    // The delete term is gated on `d.deletedAt > fa`, NOT `d.deletedAt` alone:
+    // a soft-deleted row still present at query time is only an unabsorbed
+    // unlike if the sweep that produced `fa` ran BEFORE the delete happened.
+    // If the sweep already ran after the delete (fa >= deletedAt), the cached
+    // count already reflects the unlike, and subtracting again would
+    // double-count it (case 4: c<=fa && d<=fa -> 0).
     if (d.createdAt > fa) cur[field] += 1;
-    if (d.deletedAt) cur[field] -= 1;
+    if (d.deletedAt && d.deletedAt > fa) cur[field] -= 1;
   }
   return out;
 }
