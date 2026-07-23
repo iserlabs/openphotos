@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { unstable_cache } from "next/cache";
+import { AppView, type ThreadView } from "@luminance/atproto";
+import { engagementFor, findInteraction, type Db } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
+import { getSession } from "@/lib/session";
+import { routeInteraction } from "@/lib/interactions";
 import { getPhotoRecord, isSensitive, buildAtUri } from "@/lib/queries";
 import { safeExternalHref } from "@/lib/safe-href";
+import { flattenThread } from "@/lib/thread";
 import { SensitiveImage } from "@/components/photo-card";
-import type { Db } from "@luminance/db";
+import { LikeButton } from "@/components/like-button";
+import { CommentThread } from "@/components/comment-thread";
+import { CommentComposer } from "@/components/comment-composer";
 
 // Live DB per request — moderation/label state must always be current.
 export const dynamic = "force-dynamic";
@@ -32,6 +40,24 @@ function decodeParam(s: string): string {
     return s;
   }
 }
+
+/**
+ * 60s cache for the read-only Bluesky thread (spec §7). `unstable_cache` is
+ * independent of this route's `force-dynamic` segment config: that setting
+ * only forces per-request *rendering* and disables `fetch()` caching — it
+ * does not touch Next's Data Cache, which `unstable_cache` uses here to
+ * persist this non-`fetch` AppView call across requests. Keyed on the at-uri
+ * (its only argument) so different photos never share an entry. Chosen over
+ * a bare per-request call because the brief calls for an explicit 60s cache
+ * and this is the simplest mechanism that coexists with force-dynamic; a
+ * plain uncached call remains the documented fallback if this ever proves to
+ * fight the route's dynamic rendering in practice.
+ */
+const getCachedThread = unstable_cache(
+  async (atUri: string): Promise<ThreadView> => new AppView().getPostThread(atUri, 10),
+  ["photo-thread"],
+  { revalidate: 60 },
+);
 
 async function load(db: Db, { did, collection, rkey }: Params) {
   const atUri = buildAtUri(decodeParam(did), decodeParam(collection), decodeParam(rkey));
@@ -68,11 +94,43 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
   if (!rec) notFound();
   const { items, photographer } = rec;
   const decodedDid = decodeParam(p.did);
+  const decodedCollection = decodeParam(p.collection);
+  const decodedRkey = decodeParam(p.rkey);
+  const atUri = buildAtUri(decodedDid, decodedCollection, decodedRkey);
+  const returnTo = `/photo/${encodeURIComponent(decodedDid)}/${decodedCollection}/${decodedRkey}`;
 
   const sourceHref =
     items[0].source === "bsky"
       ? `https://bsky.app/profile/${decodedDid}/post/${p.rkey}`
       : safeExternalHref(photographer.website);
+
+  // Interactions (likes/comments) only exist for bsky-sourced photos — a real
+  // app.bsky.feed.post backs them. Luminance/grain sources get a disabled row
+  // instead (spec §7/§10 — phase 3 fills this router branch).
+  const routed = routeInteraction(items[0]);
+  const session = await getSession();
+
+  let likeCount = 0;
+  let liked = false;
+  let commentNodes: ReturnType<typeof flattenThread> = [];
+  let threadUnavailable = false;
+
+  if (routed.supported) {
+    const db = getDb();
+    const [engagement, interaction] = await Promise.all([
+      engagementFor(db, [atUri]),
+      session.did ? findInteraction(db, session.did, "like", atUri) : Promise.resolve(null),
+    ]);
+    likeCount = engagement.get(atUri)?.likeCount ?? 0;
+    liked = interaction != null;
+
+    try {
+      const thread = await getCachedThread(atUri);
+      commentNodes = flattenThread(thread, { maxDepth: 2 });
+    } catch {
+      threadUnavailable = true;
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
@@ -165,6 +223,48 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
           );
         })}
       </div>
+
+      <section className="mt-12 border-t border-zinc-800 pt-8">
+        {routed.supported ? (
+          <>
+            <LikeButton
+              atUri={atUri}
+              liked={liked}
+              count={likeCount}
+              signedIn={session.did != null}
+              returnTo={returnTo}
+            />
+
+            <div className="mt-8">
+              <h2 className="text-sm font-medium text-zinc-400">Comments</h2>
+
+              <div className="mt-3">
+                {threadUnavailable ? (
+                  <p className="text-sm text-zinc-500">Comments temporarily unavailable</p>
+                ) : (
+                  <CommentThread nodes={commentNodes} viewerDid={session.did} />
+                )}
+              </div>
+
+              {session.did ? (
+                <CommentComposer atUri={atUri} />
+              ) : (
+                <p className="mt-4 text-sm text-zinc-500">
+                  <Link
+                    href={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+                    className="text-sky-400 hover:text-sky-300"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  to comment.
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-zinc-600">Interactions arrive with portfolio publishing</p>
+        )}
+      </section>
     </div>
   );
 }
