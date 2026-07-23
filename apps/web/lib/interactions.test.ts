@@ -493,7 +493,6 @@ describe("followPhotographer", () => {
 
     const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
       photographerDid: PHOTOGRAPHER,
-      photographerHandle: "photog.test",
     });
 
     expect(result).toEqual({ ok: true });
@@ -515,7 +514,6 @@ describe("followPhotographer", () => {
 
     await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
       photographerDid: PHOTOGRAPHER,
-      photographerHandle: "photog.test",
     });
 
     const [notif] = await db.select().from(notifications);
@@ -536,7 +534,6 @@ describe("followPhotographer", () => {
 
     const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
       photographerDid: PHOTOGRAPHER,
-      photographerHandle: "photog.test",
     });
 
     expect(result).toEqual({ ok: true });
@@ -558,10 +555,32 @@ describe("followPhotographer", () => {
     await expect(
       followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
         photographerDid: PHOTOGRAPHER,
-        photographerHandle: "photog.test",
       }),
     ).rejects.toThrow(RateLimitError);
     expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("linkUri always uses the DB row's handle, never a client-supplied value on the target", async () => {
+    const db = await createTestDb();
+    // The DB's handle is the source of truth ...
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "dbhandle.test" });
+    const { agent } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.graph.follow/f9", cid: "bafyf9" } }),
+    });
+
+    // ... even if some caller (a stale form field, a parallel task's UI) manages
+    // to smuggle a *different* handle onto the target object. Built without a
+    // type annotation so TS's excess-property check doesn't block the extra
+    // field — this simulates a caller bypassing the (narrowed) FollowTarget type.
+    const targetWithStaleClientHandle = {
+      photographerDid: PHOTOGRAPHER,
+      photographerHandle: "client-stale.test",
+    };
+
+    await followPhotographer(db, async () => agent, VIEWER, "viewer.test", targetWithStaleClientHandle);
+
+    const [notif] = await db.select().from(notifications);
+    expect(notif.linkUri).toBe("/dbhandle.test");
   });
 
   it("re-following after an unfollow does not duplicate the notification row (dedupe key covers it)", async () => {
@@ -577,12 +596,10 @@ describe("followPhotographer", () => {
 
     await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
       photographerDid: PHOTOGRAPHER,
-      photographerHandle: "photog.test",
     });
     await unfollowPhotographer(db, async () => agent, VIEWER, PHOTOGRAPHER);
     await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
       photographerDid: PHOTOGRAPHER,
-      photographerHandle: "photog.test",
     });
 
     const notifs = await db.select().from(notifications);

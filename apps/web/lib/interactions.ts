@@ -9,7 +9,7 @@ import {
   pushNotification,
   type Db,
 } from "@luminance/db";
-import { buildLikeRecord, buildReplyRecord, buildFollowRecord } from "@luminance/atproto";
+import { buildLikeRecord, buildReplyRecord, buildFollowRecord, graphemeSlice } from "@luminance/atproto";
 import { getOAuthClient } from "./oauth";
 import { splitAtUri } from "./queries";
 
@@ -105,6 +105,22 @@ async function isRegisteredPhotographer(db: Db, did: string): Promise<boolean> {
     .from(photographers)
     .where(and(eq(photographers.did, did), eq(photographers.status, "active")));
   return row != null;
+}
+
+/**
+ * Like {@link isRegisteredPhotographer}, but returns the row (did + handle)
+ * instead of a boolean. Used by {@link followPhotographer}, whose notification
+ * `linkUri` is built from the photographer's *handle* — that handle MUST come
+ * from this server-side lookup, never from client-supplied input (a form
+ * field, or anything else on the caller's `FollowTarget`), since the client
+ * can't be trusted to submit its own notification routing.
+ */
+async function getActivePhotographer(db: Db, did: string): Promise<{ did: string; handle: string } | null> {
+  const [row] = await db
+    .select({ did: photographers.did, handle: photographers.handle })
+    .from(photographers)
+    .where(and(eq(photographers.did, did), eq(photographers.status, "active")));
+  return row ?? null;
 }
 
 /**
@@ -314,7 +330,9 @@ export async function commentOnPhoto(
         // same photo and each is its own notification.
         subjectUri: created.uri,
         linkUri: input.photoLinkUri,
-        snippet: input.text.slice(0, 140),
+        // grapheme-safe: input.text.slice(0, 140) would split surrogate pairs
+        // / multi-code-point emoji sequences at the boundary (spec review carry).
+        snippet: graphemeSlice(input.text, 140),
       });
     }
   } catch {
@@ -361,8 +379,6 @@ export async function deleteOwnComment(
 
 export type FollowTarget = {
   photographerDid: string;
-  /** Photographer's handle at follow time — notification `linkUri` (spec §3). */
-  photographerHandle: string;
 };
 
 /**
@@ -372,6 +388,11 @@ export type FollowTarget = {
  *
  * Rate limit is asserted first, before any PDS write (same trap as
  * {@link commentOnPhoto} — no shared enforcement point).
+ *
+ * The notification `linkUri` is built from {@link getActivePhotographer}'s
+ * row, NOT from any client-supplied handle — `FollowTarget` intentionally
+ * carries only `photographerDid`. A caller with a stale or spoofed handle
+ * (e.g. a form field) has no way to influence where the notification links.
  */
 export async function followPhotographer(
   db: Db,
@@ -402,16 +423,19 @@ export async function followPhotographer(
       kind: "follow",
       subjectUri: target.photographerDid,
     });
-    if (target.photographerDid !== actorDid && (await isRegisteredPhotographer(db, target.photographerDid))) {
-      await pushNotification(db, {
-        recipientDid: target.photographerDid,
-        actorDid,
-        actorHandle,
-        kind: "follow",
-        subjectUri: target.photographerDid,
-        linkUri: `/${target.photographerHandle}`,
-        snippet: null,
-      });
+    if (target.photographerDid !== actorDid) {
+      const photographer = await getActivePhotographer(db, target.photographerDid);
+      if (photographer) {
+        await pushNotification(db, {
+          recipientDid: photographer.did,
+          actorDid,
+          actorHandle,
+          kind: "follow",
+          subjectUri: target.photographerDid,
+          linkUri: `/${photographer.handle}`,
+          snippet: null,
+        });
+      }
     }
   } catch {
     return { ok: false, error: "followed on Bluesky, but syncing to Luminance failed — it will appear shortly" };

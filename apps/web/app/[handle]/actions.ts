@@ -11,9 +11,15 @@ type SessionLike = { did?: string; handle?: string };
 
 /**
  * Pure core for followAction: no coupling to iron-session or Next context.
- * The photographer's did+handle come from the form (the profile page the
- * viewer is on); the actor's identity (did, handle) is ALWAYS the session —
- * never trust a client-supplied did for who is doing the following.
+ * The photographer's did comes from the form (the profile page the viewer is
+ * on); the actor's identity (did, handle) is ALWAYS the session — never trust
+ * a client-supplied did for who is doing the following.
+ *
+ * The form may still submit a `photographerHandle` field (a leftover UI
+ * field, or one a parallel task's UI submits) — it is intentionally never
+ * read here. The notification `linkUri` is resolved server-side from the DB
+ * row in `followPhotographer`/`getActivePhotographer`, never from client
+ * input, so an extra/stale handle field is harmless and must not error.
  */
 export async function followActionCore(
   db: Db,
@@ -23,13 +29,11 @@ export async function followActionCore(
   if (!session.did) return { ok: false, error: "sign in to follow this photographer" };
 
   const photographerDid = String(formData.get("photographerDid") ?? "");
-  const photographerHandle = String(formData.get("photographerHandle") ?? "");
-  if (!photographerDid || !photographerHandle) return { ok: false, error: "missing photographer" };
+  if (!photographerDid) return { ok: false, error: "missing photographer" };
 
   try {
     return await followPhotographer(db, (did) => restoreAgent(db, did), session.did, session.handle ?? session.did, {
       photographerDid,
-      photographerHandle,
     });
   } catch (err) {
     if (err instanceof RateLimitError) return { ok: false, error: "Slow down — you're interacting a lot right now." };

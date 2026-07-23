@@ -35,15 +35,18 @@ describe("followActionCore", () => {
     expect(result).toEqual({ ok: false, error: "missing photographer" });
   });
 
-  it("returns missing photographer error when photographerHandle is not provided", async () => {
+  it("does not require photographerHandle — an absent, or a stale extra, handle field is ignored", async () => {
     const db = await createMockDb();
     const session = { did: VIEWER, handle: "viewer" };
     const formData = new FormData();
     formData.set("photographerDid", PHOTOGRAPHER);
+    // A parallel task's UI (or a stale client) might still submit this field —
+    // it must never be read, and must never trip the "missing photographer" gate.
+    formData.set("photographerHandle", "stale-client-value.test");
 
     const result = await followActionCore(db, session, formData);
 
-    expect(result).toEqual({ ok: false, error: "missing photographer" });
+    expect(result).not.toEqual({ ok: false, error: "missing photographer" });
   });
 
   it("returns signed-in error before trying to access db (session check first)", async () => {
