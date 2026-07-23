@@ -409,7 +409,7 @@ Export from barrel. Commit: `feat(atproto): interaction record builders`.
 
 **Interfaces:**
 - Consumes: `AppView` (injected, tests use a local HTTP fixture server or injected fetchJson), db tables/helpers, `photographers`/`photos`.
-- Produces: `runEngagementSweep(db, appview, opts?: { likesPageSize?: number; sweepIndex?: number }): Promise<void>`; `startEngagementSweep(db, opts): { stop(): void }` — base interval 3 min; computes governed interval `max(180_000, ceil(requestsPerSweep / (3000 * 0.4)) * 300_000)` and logs it; follower diff only when `sweepIndex % 5 === 0`; prunes `interactions` where `deletedAt < engagement.fetchedAt` for their subject; staleness check: oldest fetchedAt > 30 min → `console.error("engagement_staleness_seconds=…")` + Sentry-if-enabled (mirror cursor-lag pattern in main.ts).
+- Produces: `runEngagementSweep(db, appview, opts?: { likesPageSize?: number; sweepIndex?: number }): Promise<void>`; `startEngagementSweep(db, opts): { stop(): void }` — base interval 3 min; computes governed interval `max(180_000, Math.ceil((requestsPerSweep / 240) * 60_000))` and logs it (240 = 40% of the ~600 req/min public budget; at ~200 requests/sweep the 3-min base holds); follower diff only when `sweepIndex % 5 === 0`; prunes `interactions` where `deletedAt < engagement.fetchedAt` for their subject; staleness check: oldest fetchedAt > 30 min → `console.error("engagement_staleness_seconds=…")` + Sentry-if-enabled (mirror cursor-lag pattern in main.ts).
 
 - [ ] **Step 1: Failing tests** (createTestDb + injected appview stub):
   - counts upserted from getPosts for registered-active photographers' bsky post URIs only (deregistered/luminance-source excluded).
