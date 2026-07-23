@@ -4,3 +4,4 @@ export * from "./mappers/types.js";
 export * from "./mappers/luminance.js";
 export * from "./mappers/bsky.js";
 export * from "./mappers/grain.js";
+export * from "./interaction-records.js";
