@@ -145,35 +145,75 @@ describe("like rise -> notifications", () => {
     expect(rows2).toHaveLength(1); // no duplicate
   });
 
-  it("treats a brand-new engagement row with counts>0 as a rise (backfill)", async () => {
-    const db = await createTestDb();
-    await seedPhotographer(db, KEVIN, "kevin.photos");
-    const uri = "at://did:plc:kevin/app.bsky.feed.post/p1";
-    await seedBskyPhoto(db, uri, KEVIN);
-    // no prior engagement row at all
-
-    const liker = actor("did:plc:liker", "liker.bsky.social");
-    const { appview, calls } = makeStubAppView({
-      getPosts: async () => [post(uri, { likeCount: 1 })],
-      getLikes: async () => [{ actor: liker, createdAt: "2026-07-23T00:00:00Z", indexedAt: "2026-07-23T00:00:00Z" }],
-    });
-    await runEngagementSweep(db, appview);
-    expect(calls.getLikes).toEqual([uri]);
-    expect(await db.select().from(notifications)).toHaveLength(1);
-  });
-
   it("does not notify the photographer for a like on their own post", async () => {
     const db = await createTestDb();
     await seedPhotographer(db, KEVIN, "kevin.photos");
     const uri = "at://did:plc:kevin/app.bsky.feed.post/p1";
     await seedBskyPhoto(db, uri, KEVIN);
+    // baseline row so the like RISE (0 -> 1) fires — proving the fan-out runs
+    // but self-likes are still skipped (not merely skipped by first-sweep gating)
+    await db.insert(engagement).values({ postUri: uri, likeCount: 0, replyCount: 0, repostCount: 0, fetchedAt: new Date(Date.now() - 60_000) });
 
-    const { appview } = makeStubAppView({
+    const { appview, calls } = makeStubAppView({
       getPosts: async () => [post(uri, { likeCount: 1 })],
       getLikes: async () => [{ actor: actor(KEVIN, "kevin.photos"), createdAt: "2026-07-23T00:00:00Z", indexedAt: "2026-07-23T00:00:00Z" }],
     });
     await runEngagementSweep(db, appview);
+    expect(calls.getLikes).toEqual([uri]); // fan-out DID run
+    expect(await db.select().from(notifications)).toHaveLength(0); // but self-like skipped
+  });
+});
+
+describe("first-sweep baseline (no prior engagement row)", () => {
+  it("seeds the engagement row but fires ZERO notifications when there was no prior row (counts>0)", async () => {
+    const db = await createTestDb();
+    await seedPhotographer(db, KEVIN, "kevin.photos");
+    const uri = "at://did:plc:kevin/app.bsky.feed.post/p1";
+    await seedBskyPhoto(db, uri, KEVIN);
+    // no prior engagement row at all — this is a first-ever sweep of the post
+
+    const liker = actor("did:plc:liker", "liker.bsky.social");
+    const { appview, calls } = makeStubAppView({
+      getPosts: async () => [post(uri, { likeCount: 5, replyCount: 3 })],
+      getLikes: async () => [{ actor: liker, createdAt: "2026-07-23T00:00:00Z", indexedAt: "2026-07-23T00:00:00Z" }],
+    });
+    await runEngagementSweep(db, appview, { sweepIndex: 1 }); // skip follower diff
+
+    // Row is written (baseline seed) ...
+    const [row] = await db.select().from(engagement).where(eq(engagement.postUri, uri));
+    expect(row).toMatchObject({ postUri: uri, likeCount: 5, replyCount: 3 });
+    // ... but NO like/reply fan-out happened — historical engagement is not news.
+    expect(calls.getLikes).toEqual([]);
+    expect(calls.getPostThread).toEqual([]);
     expect(await db.select().from(notifications)).toHaveLength(0);
+  });
+
+  it("fires notifications on a LATER sweep once a baseline exists (delta path)", async () => {
+    const db = await createTestDb();
+    await seedPhotographer(db, KEVIN, "kevin.photos");
+    const uri = "at://did:plc:kevin/app.bsky.feed.post/p1";
+    await seedBskyPhoto(db, uri, KEVIN);
+
+    const liker = actor("did:plc:liker", "liker.bsky.social");
+    // First sweep: seeds baseline at likeCount 1, ZERO notifications.
+    const first = makeStubAppView({
+      getPosts: async () => [post(uri, { likeCount: 1 })],
+      getLikes: async () => [{ actor: liker, createdAt: "2026-07-23T00:00:00Z", indexedAt: "2026-07-23T00:00:00Z" }],
+    });
+    await runEngagementSweep(db, first.appview, { sweepIndex: 1 });
+    expect(first.calls.getLikes).toEqual([]);
+    expect(await db.select().from(notifications)).toHaveLength(0);
+
+    // Second sweep: likeCount rose 1 -> 2 against the existing baseline -> fan-out.
+    const second = makeStubAppView({
+      getPosts: async () => [post(uri, { likeCount: 2 })],
+      getLikes: async () => [{ actor: liker, createdAt: "2026-07-23T00:00:00Z", indexedAt: "2026-07-23T00:00:00Z" }],
+    });
+    await runEngagementSweep(db, second.appview, { sweepIndex: 1 });
+    expect(second.calls.getLikes).toEqual([uri]);
+    const rows = await db.select().from(notifications).where(eq(notifications.recipientDid, KEVIN));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: "like", subjectUri: uri, actorDid: liker.did });
   });
 });
 
@@ -183,6 +223,9 @@ describe("reply rise -> thread walk", () => {
     await seedPhotographer(db, KEVIN, "kevin.photos");
     const uri = "at://did:plc:kevin/app.bsky.feed.post/p1";
     await seedBskyPhoto(db, uri, KEVIN);
+
+    // baseline row so a reply RISE (0 -> 2) fires, not a first-sweep seed
+    await db.insert(engagement).values({ postUri: uri, likeCount: 0, replyCount: 0, repostCount: 0, fetchedAt: new Date(Date.now() - 60_000) });
 
     const replier1 = actor("did:plc:r1", "r1.bsky.social", "https://cdn.bsky.app/r1.jpg");
     const replier2 = actor("did:plc:r2", "r2.bsky.social");
@@ -216,6 +259,9 @@ describe("reply rise -> thread walk", () => {
     await seedPhotographer(db, KEVIN, "kevin.photos");
     const uri = "at://did:plc:kevin/app.bsky.feed.post/p1";
     await seedBskyPhoto(db, uri, KEVIN);
+
+    // baseline row so a reply RISE (0 -> 1) fires, not a first-sweep seed
+    await db.insert(engagement).values({ postUri: uri, likeCount: 0, replyCount: 0, repostCount: 0, fetchedAt: new Date(Date.now() - 60_000) });
 
     const thread: ThreadView = {
       post: post(uri, { replyCount: 1 }),

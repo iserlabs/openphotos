@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { photographers, notificationsPage } from "@luminance/db";
+import { photographers, notificationsPage, unreadCount } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { splitAtUri } from "@/lib/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { MarkReadOnMount } from "@/components/mark-read-on-mount";
+import { markAllReadAction } from "./actions";
 
 export const metadata: Metadata = {
   title: "Notifications — Luminance",
@@ -75,12 +76,28 @@ export default async function NotificationsPage({
     cursor,
   });
   const unreadIds = items.filter((n) => n.readAt == null).map((n) => n.id);
+  // Total unread across ALL pages (not just this one) — drives the "Mark all
+  // read" affordance, which reaches unread rows beyond the current page that
+  // the on-mount auto-marker never touches.
+  const unread = await unreadCount(db, session.did);
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
       <MarkReadOnMount ids={unreadIds} />
 
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Notifications</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Notifications</h1>
+        {unread > 0 ? (
+          <form action={markAllReadAction}>
+            <button
+              type="submit"
+              className="rounded-md border border-zinc-800 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+            >
+              Mark all read
+            </button>
+          </form>
+        ) : null}
+      </div>
 
       {items.length === 0 ? (
         <p className="mt-8 text-sm text-zinc-500">No notifications yet.</p>

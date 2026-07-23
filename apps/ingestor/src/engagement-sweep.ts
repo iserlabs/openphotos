@@ -155,11 +155,13 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
           set: { likeCount: post.likeCount, replyCount: post.replyCount, repostCount: post.repostCount, fetchedAt: now },
         });
 
-        // No previous row (first-ever sweep of this post) with counts>0 is
-        // treated as a rise too: it's a backfill of pre-existing engagement,
-        // and notifications dedupe via their unique key regardless.
-        const likeRose = prev ? post.likeCount > prev.likeCount : post.likeCount > 0;
-        const replyRose = prev ? post.replyCount > prev.replyCount : post.replyCount > 0;
+        // Baseline seeding: a post with NO previous engagement row is a
+        // first-ever sweep — its counts are historical, not news. We upsert the
+        // row (above) but fire ZERO like/reply notifications; a rise only fires
+        // against an existing baseline. Without this, the first sweep would
+        // flood the photographer with a notification per pre-existing like/reply.
+        const likeRose = prev ? post.likeCount > prev.likeCount : false;
+        const replyRose = prev ? post.replyCount > prev.replyCount : false;
 
         if (likeRose) {
           likeRequests++;
@@ -183,6 +185,12 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
     }
 
     if (sweepIndex % FOLLOWER_DIFF_EVERY === 0) {
+      // Follower diff is intentionally NOT baseline-gated like likes/replies
+      // above: it's bounded (≤100 followers per call) and notifications dedupe
+      // forever on their unique key, so the very first sweep backfills a
+      // one-time burst of follow notifications for pre-existing followers. That
+      // one-time backfill is accepted (bounded + deduped); every later sweep
+      // only ever surfaces genuinely new followers.
       const scopePhotographers = await activePhotographers(db);
       followerRequests = scopePhotographers.length;
       for (const p of scopePhotographers) {
