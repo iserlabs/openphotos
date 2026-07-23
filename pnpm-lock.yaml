@@ -54,6 +54,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@atproto/api':
+        specifier: ^0.20.31
+        version: 0.20.31
       '@atproto/jwk-jose':
         specifier: ^0.2.4
         version: 0.2.4
