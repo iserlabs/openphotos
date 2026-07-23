@@ -1,10 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Agent } from "@atproto/api";
 import { createTestDb, photographers, interactions, notifications, type Db } from "@luminance/db";
+import { COMMENT_MAX_GRAPHEMES } from "@luminance/atproto";
 import {
   routeInteraction,
   likePhoto,
   unlikePhoto,
+  commentOnPhoto,
+  deleteOwnComment,
+  followPhotographer,
+  unfollowPhotographer,
   assertRateLimit,
   RateLimitError,
   RATE_LIMIT,
@@ -283,5 +288,335 @@ describe("unlikePhoto", () => {
     // Proves we paged instead of giving up
     expect(listRecords).toHaveBeenCalledTimes(1);
     expect(deleteRecord).toHaveBeenCalledWith({ repo: VIEWER, collection: "app.bsky.feed.like", rkey: "found1" });
+  });
+});
+
+describe("commentOnPhoto", () => {
+  it("top-level comment: root === parent === subject; interaction row keyed by the photo's post uri", async () => {
+    const db = await createTestDb();
+    const replyUri = "at://did:plc:viewer/app.bsky.feed.post/c1";
+    const { agent, createRecord } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: replyUri, cid: "bafyc1" } }),
+    });
+
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "nice shot",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(createRecord).toHaveBeenCalledWith({
+      repo: VIEWER,
+      collection: "app.bsky.feed.post",
+      record: expect.objectContaining({
+        $type: "app.bsky.feed.post",
+        text: "nice shot",
+        reply: { root: { uri: POST_URI, cid: POST_CID }, parent: { uri: POST_URI, cid: POST_CID } },
+      }),
+    });
+    const rows = await db.select().from(interactions);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      recordUri: replyUri,
+      actorDid: VIEWER,
+      kind: "comment",
+      subjectUri: POST_URI,
+      text: "nice shot",
+    });
+  });
+
+  it("nested comment: root stays the photo's post, parent is the comment being replied to", async () => {
+    const db = await createTestDb();
+    const replyUri = "at://did:plc:viewer/app.bsky.feed.post/c2";
+    const parent = { uri: "at://did:plc:other/app.bsky.feed.post/c1", cid: "bafyc1" };
+    const { agent, createRecord } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: replyUri, cid: "bafyc2" } }),
+    });
+
+    await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      parent,
+      text: "agreed",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+
+    expect(createRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        record: expect.objectContaining({ reply: { root: { uri: POST_URI, cid: POST_CID }, parent } }),
+      }),
+    );
+    const [row] = await db.select().from(interactions);
+    // The interactions row's subjectUri stays the PHOTO's root post uri, not the parent comment.
+    expect(row.subjectUri).toBe(POST_URI);
+  });
+
+  it("pushes a notification keyed to the reply's own uri, with a 140-char snippet, when the photographer is registered and not the actor", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const replyUri = "at://did:plc:viewer/app.bsky.feed.post/c3";
+    const { agent } = makeFakeAgent({ createRecord: async () => ({ data: { uri: replyUri, cid: "bafyc3" } }) });
+    const longText = "x".repeat(200);
+
+    await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: longText,
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+
+    const notifs = await db.select().from(notifications);
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0]).toMatchObject({
+      recipientDid: PHOTOGRAPHER,
+      actorDid: VIEWER,
+      kind: "comment",
+      subjectUri: replyUri,
+      linkUri: POST_URI,
+      snippet: longText.slice(0, 140),
+    });
+  });
+
+  it("does NOT push a notification when the actor comments on their own photo", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const { agent } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:photographer/app.bsky.feed.post/c4", cid: "bafyc4" } }),
+    });
+
+    await commentOnPhoto(db, async () => agent, PHOTOGRAPHER, "photog.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "my own photo",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+
+    expect(await db.select().from(notifications)).toHaveLength(0);
+    expect(await db.select().from(interactions)).toHaveLength(1);
+  });
+
+  it("records the interaction but skips the notification when the photographer is not registered", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.feed.post/c5", cid: "bafyc5" } }),
+    });
+
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "great light",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(await db.select().from(interactions)).toHaveLength(1);
+    expect(await db.select().from(notifications)).toHaveLength(0);
+  });
+
+  it("rejects text outside 1-300 graphemes as {ok:false} — never a throw — and never calls the agent", async () => {
+    const db = await createTestDb();
+    const { agent, createRecord } = makeFakeAgent();
+
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "x".repeat(COMMENT_MAX_GRAPHEMES + 1),
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+
+    expect(result.ok).toBe(false);
+    expect((result as { ok: false; error: string }).error).toContain("1–300");
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects the 31st comment within the rate-limit window; createRecord never called", async () => {
+    const db = await createTestDb();
+    const rows = Array.from({ length: RATE_LIMIT.max }, (_, i) => ({
+      recordUri: `at://did:plc:viewer/app.bsky.feed.post/seed${i}`,
+      actorDid: VIEWER,
+      kind: "comment" as const,
+      subjectUri: `${POST_URI}-${i}`,
+    }));
+    await db.insert(interactions).values(rows);
+    const { agent, createRecord } = makeFakeAgent();
+
+    await expect(
+      commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+        subject: { uri: POST_URI, cid: POST_CID },
+        text: "hello",
+        photographerDid: PHOTOGRAPHER,
+        photoLinkUri: POST_URI,
+      }),
+    ).rejects.toThrow(RateLimitError);
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteOwnComment", () => {
+  it("soft-deletes the interaction and calls deleteRecord with the parsed collection+rkey", async () => {
+    const db = await createTestDb();
+    const recordUri = "at://did:plc:viewer/app.bsky.feed.post/mycomment1";
+    await db.insert(interactions).values({ recordUri, actorDid: VIEWER, kind: "comment", subjectUri: POST_URI, text: "hi" });
+    const { agent, deleteRecord } = makeFakeAgent();
+
+    const result = await deleteOwnComment(db, async () => agent, VIEWER, recordUri);
+
+    expect(result).toEqual({ ok: true });
+    expect(deleteRecord).toHaveBeenCalledWith({ repo: VIEWER, collection: "app.bsky.feed.post", rkey: "mycomment1" });
+    const [row] = await db.select().from(interactions);
+    expect(row.deletedAt).not.toBeNull();
+  });
+
+  it("rejects a recordUri belonging to a different actor, never touching the agent factory", async () => {
+    const db = await createTestDb();
+    const foreignUri = "at://did:plc:someoneelse/app.bsky.feed.post/c9";
+    const agentFactory = vi.fn(async () => {
+      throw new Error("agentFactory should not be called for a foreign recordUri");
+    });
+
+    const result = await deleteOwnComment(db, agentFactory, VIEWER, foreignUri);
+
+    expect(result.ok).toBe(false);
+    expect(agentFactory).not.toHaveBeenCalled();
+  });
+});
+
+describe("followPhotographer", () => {
+  it("creates the follow record via the agent, then records the interaction keyed by the returned uri", async () => {
+    const db = await createTestDb();
+    const followUri = "at://did:plc:viewer/app.bsky.graph.follow/f1";
+    const { agent, createRecord } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: followUri, cid: "bafyf1" } }),
+    });
+
+    const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+      photographerHandle: "photog.test",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(createRecord).toHaveBeenCalledWith({
+      repo: VIEWER,
+      collection: "app.bsky.graph.follow",
+      record: expect.objectContaining({ $type: "app.bsky.graph.follow", subject: PHOTOGRAPHER }),
+    });
+    const [row] = await db.select().from(interactions);
+    expect(row).toMatchObject({ recordUri: followUri, actorDid: VIEWER, kind: "follow", subjectUri: PHOTOGRAPHER });
+  });
+
+  it("pushes a notification with linkUri = /handle, when the photographer is registered and not the actor", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const { agent } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.graph.follow/f2", cid: "bafyf2" } }),
+    });
+
+    await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+      photographerHandle: "photog.test",
+    });
+
+    const [notif] = await db.select().from(notifications);
+    expect(notif).toMatchObject({
+      recipientDid: PHOTOGRAPHER,
+      actorDid: VIEWER,
+      kind: "follow",
+      subjectUri: PHOTOGRAPHER,
+      linkUri: "/photog.test",
+    });
+  });
+
+  it("does NOT push a notification when following unregistered photographer, but still records the interaction", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.graph.follow/f3", cid: "bafyf3" } }),
+    });
+
+    const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+      photographerHandle: "photog.test",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(await db.select().from(interactions)).toHaveLength(1);
+    expect(await db.select().from(notifications)).toHaveLength(0);
+  });
+
+  it("rejects the 31st follow within the rate-limit window; createRecord never called", async () => {
+    const db = await createTestDb();
+    const rows = Array.from({ length: RATE_LIMIT.max }, (_, i) => ({
+      recordUri: `at://did:plc:viewer/app.bsky.graph.follow/seed${i}`,
+      actorDid: VIEWER,
+      kind: "follow" as const,
+      subjectUri: `did:plc:photog${i}`,
+    }));
+    await db.insert(interactions).values(rows);
+    const { agent, createRecord } = makeFakeAgent();
+
+    await expect(
+      followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+        photographerDid: PHOTOGRAPHER,
+        photographerHandle: "photog.test",
+      }),
+    ).rejects.toThrow(RateLimitError);
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("re-following after an unfollow does not duplicate the notification row (dedupe key covers it)", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    let n = 0;
+    const { agent } = makeFakeAgent({
+      createRecord: async () => {
+        n++;
+        return { data: { uri: `at://did:plc:viewer/app.bsky.graph.follow/f${n}`, cid: `bafyf${n}` } };
+      },
+    });
+
+    await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+      photographerHandle: "photog.test",
+    });
+    await unfollowPhotographer(db, async () => agent, VIEWER, PHOTOGRAPHER);
+    await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+      photographerHandle: "photog.test",
+    });
+
+    const notifs = await db.select().from(notifications);
+    expect(notifs).toHaveLength(1); // onConflictDoNothing — no duplicate across unfollow/refollow
+  });
+});
+
+describe("unfollowPhotographer", () => {
+  it("soft-deletes the interaction and calls deleteRecord with the parsed rkey", async () => {
+    const db = await createTestDb();
+    await db.insert(interactions).values({
+      recordUri: "at://did:plc:viewer/app.bsky.graph.follow/f1",
+      actorDid: VIEWER,
+      kind: "follow",
+      subjectUri: PHOTOGRAPHER,
+    });
+    const { agent, deleteRecord } = makeFakeAgent();
+
+    const result = await unfollowPhotographer(db, async () => agent, VIEWER, PHOTOGRAPHER);
+
+    expect(result).toEqual({ ok: true });
+    expect(deleteRecord).toHaveBeenCalledWith({ repo: VIEWER, collection: "app.bsky.graph.follow", rkey: "f1" });
+    const [row] = await db.select().from(interactions);
+    expect(row.deletedAt).not.toBeNull();
+  });
+
+  it("returns {ok:false} with NO paging fallback when no interaction row exists", async () => {
+    const db = await createTestDb();
+    const { agent, deleteRecord, listRecords } = makeFakeAgent();
+
+    const result = await unfollowPhotographer(db, async () => agent, VIEWER, PHOTOGRAPHER);
+
+    expect(result).toEqual({ ok: false, error: "unfollow in your Bluesky app" });
+    expect(listRecords).not.toHaveBeenCalled();
+    expect(deleteRecord).not.toHaveBeenCalled();
   });
 });

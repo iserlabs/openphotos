@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createTestDb, photographers, type Db } from "@luminance/db";
 import type { Agent } from "@atproto/api";
-import { likeActionCore, unlikeActionCore } from "./actions";
+import { likeActionCore, unlikeActionCore, commentActionCore, deleteCommentActionCore } from "./actions";
 
 const POST_URI = "at://did:plc:photographer/app.bsky.feed.post/p1";
 const VIEWER = "did:plc:viewer";
@@ -113,5 +113,90 @@ describe("unlikeActionCore", () => {
     const result = await unlikeActionCore(failingDb, session, formData);
 
     expect(result).toEqual({ ok: false, error: "sign in to like this photo" });
+  });
+});
+
+describe("commentActionCore", () => {
+  it("returns signed-in error when session.did is missing", async () => {
+    const db = await createMockDb();
+    const session = { did: "", handle: "viewer" };
+    const formData = new FormData();
+    formData.set("atUri", POST_URI);
+    formData.set("text", "nice shot");
+
+    const result = await commentActionCore(db, session, formData);
+
+    expect(result).toEqual({ ok: false, error: "sign in to comment on this photo" });
+  });
+
+  it("returns missing photo error when atUri is not provided", async () => {
+    const db = await createMockDb();
+    const session = { did: VIEWER, handle: "viewer" };
+    const formData = new FormData();
+    formData.set("text", "nice shot");
+
+    const result = await commentActionCore(db, session, formData);
+
+    expect(result).toEqual({ ok: false, error: "missing photo" });
+  });
+
+  it("returns signed-in error before trying to access db (session check first)", async () => {
+    const failingDb = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error("db should not be accessed");
+        },
+      },
+    ) as Db;
+    const session = { did: "" };
+    const formData = new FormData();
+    formData.set("atUri", POST_URI);
+    formData.set("text", "nice shot");
+
+    const result = await commentActionCore(failingDb, session, formData);
+
+    expect(result).toEqual({ ok: false, error: "sign in to comment on this photo" });
+  });
+});
+
+describe("deleteCommentActionCore", () => {
+  it("returns signed-in error when session.did is missing", async () => {
+    const db = await createMockDb();
+    const session = { did: "", handle: "viewer" };
+    const formData = new FormData();
+    formData.set("recordUri", "at://did:plc:viewer/app.bsky.feed.post/c1");
+
+    const result = await deleteCommentActionCore(db, session, formData);
+
+    expect(result).toEqual({ ok: false, error: "sign in to delete this comment" });
+  });
+
+  it("returns missing comment error when recordUri is not provided", async () => {
+    const db = await createMockDb();
+    const session = { did: VIEWER, handle: "viewer" };
+    const formData = new FormData();
+
+    const result = await deleteCommentActionCore(db, session, formData);
+
+    expect(result).toEqual({ ok: false, error: "missing comment" });
+  });
+
+  it("returns signed-in error before trying to access db (session check first)", async () => {
+    const failingDb = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error("db should not be accessed");
+        },
+      },
+    ) as Db;
+    const session = { did: "" };
+    const formData = new FormData();
+    formData.set("recordUri", "at://did:plc:viewer/app.bsky.feed.post/c1");
+
+    const result = await deleteCommentActionCore(failingDb, session, formData);
+
+    expect(result).toEqual({ ok: false, error: "sign in to delete this comment" });
   });
 });
