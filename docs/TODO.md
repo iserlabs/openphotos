@@ -50,3 +50,14 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [ ] **Notifications-page avatar scheme check** — confirm `/notifications` runs actor avatar URLs through the same `safeExternalHref` scheme-check the comment thread uses (AppView/DB avatar URLs are untrusted input).
 - [ ] **Shared photographer-lookup helper consolidation** — `isRegisteredPhotographer` / `getActivePhotographer` (`apps/web/lib/interactions.ts`) and `getPhotographerByHandle` (`apps/web/lib/queries.ts`) overlap; consolidate into one active-photographer lookup.
 - [ ] **Comment/follow DB-half self-heal test parity** — `interactions.test.ts` proves the record-first / DB-half-failure `{ok:false}` path for `likePhoto`; add the equivalent coverage for `commentOnPhoto` and `followPhotographer`.
+
+### Phase-2 final-review fast-follows (filed during the final fix wave; none block merge)
+
+- [ ] **Expired-session re-auth UX** — a `restoreAgent` failure (revoked/expired OAuth session) currently surfaces as a generic `{ok:false}`. Detect it and route the viewer to a "session expired" state + `/login?returnTo=<current>` so they can re-auth in place instead of hitting a dead write.
+- [ ] **Author-label blur union in threads** — a comment's blur-gate uses only the reply post's own labels; union in the author's account-level labels so an author-labeled account's replies blur consistently with their photos.
+- [ ] **Sweep-side janitor** — periodic cleanup the sweep is well-placed to own: prune stale `interactions` follow rows (unfollows never absorbed by an engagement row), TTL-expire old `oauthStates`, and clean up `oauthSessions` on explicit signOut.
+- [ ] **Avatar on write-through notifications** — like/comment/follow notifications written from `lib/interactions.ts` store `actorAvatarUrl: null` (only the sweep path snapshots avatars). Resolve and store the actor's avatar on the write-through path so the notifications list isn't avatar-less for fresh interactions.
+- [ ] **Reply-to-comment UI + parent-ref validation** — the composer only posts top-level comments; add a reply affordance that threads under a parent comment, and validate the supplied parent ref (uri+cid) belongs to the same root before building the reply record.
+- [ ] **429 extra backoff multiplier** — on a rate-limited sweep abort, apply an additional backoff multiplier to the next governed interval (not just the base) so a sustained 429 storm backs off faster than the plain request-count governor.
+- [ ] **Viewer `/notifications` dead-end copy** — a signed-in non-photographer visiting `/notifications` is redirected to `/login`; give a clearer "notifications are for registered photographers" message instead of the login dead-end.
+- [ ] **Real non-empty getLikes fixture (post-launch)** — the AppView `getLikes` fixture is currently empty; capture a real non-empty response once there's live like data to harden the like fan-out against the true wire shape.
