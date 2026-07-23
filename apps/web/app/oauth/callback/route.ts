@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getOAuthClient, resolveHandle } from "@/lib/oauth";
-import { decodeAppState } from "@/lib/oauth-state";
+import { decodeAppState, errorAppState } from "@/lib/oauth-state";
 import { getIronSessionData } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +29,9 @@ export async function GET(req: Request) {
     const { session, state } = await client.callback(params);
     did = session.did;
     rawState = state;
-  } catch {
+  } catch (err) {
     did = undefined;
+    rawState = errorAppState(err);
   }
 
   const appState = decodeAppState(rawState);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { encodeAppState, decodeAppState, sanitizeReturnTo } from "./oauth-state";
+import { encodeAppState, decodeAppState, sanitizeReturnTo, errorAppState } from "./oauth-state";
 
 // encodeAppState/decodeAppState round-trip the "why did we start this OAuth
 // flow" info through @atproto/oauth-client's own `state` parameter (see the
@@ -81,5 +81,32 @@ describe("decodeAppState invalid input", () => {
   it("returns undefined for an unrecognized mode", () => {
     expect(decodeAppState(JSON.stringify({ mode: "admin" }))).toBeUndefined();
     expect(decodeAppState(JSON.stringify({}))).toBeUndefined();
+  });
+});
+
+describe("errorAppState", () => {
+  it("recovers a string state from an error object with a state property", () => {
+    expect(errorAppState({ state: "abc" })).toBe("abc");
+  });
+
+  it("returns null when error has no state property", () => {
+    expect(errorAppState(new Error("x"))).toBeNull();
+  });
+
+  it("returns null for null", () => {
+    expect(errorAppState(null)).toBeNull();
+  });
+
+  it("returns null when state is not a string", () => {
+    expect(errorAppState({ state: 42 })).toBeNull();
+  });
+
+  it("returns null for undefined", () => {
+    expect(errorAppState(undefined)).toBeNull();
+  });
+
+  it("returns null for primitives without state property", () => {
+    expect(errorAppState("string")).toBeNull();
+    expect(errorAppState(42)).toBeNull();
   });
 });

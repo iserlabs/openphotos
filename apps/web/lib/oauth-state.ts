@@ -58,3 +58,15 @@ export function decodeAppState(raw: string | null | undefined): AppState | undef
   const safeReturnTo = typeof returnTo === "string" ? sanitizeReturnTo(returnTo) : undefined;
   return safeReturnTo ? { mode, returnTo: safeReturnTo } : { mode };
 }
+
+/**
+ * Recover the app-state string the OAuth library preserves on callback failures.
+ * Structural check avoids version coupling with @atproto/oauth-client.
+ */
+export function errorAppState(err: unknown): string | null {
+  if (err && typeof err === "object" && "state" in err) {
+    const s = (err as { state?: unknown }).state;
+    return typeof s === "string" ? s : null;
+  }
+  return null;
+}
