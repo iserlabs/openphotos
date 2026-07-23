@@ -262,3 +262,38 @@ Target ≥ 90 on both pages. If short: check image proxy presets are actually
 being served (`/img/[did]/[cid]/[preset]`, `thumb`/`feed`/`full`) rather than
 full-size originals, and that `aspectRatio` is present on photo records (it
 reserves layout space and avoids CLS — spec §10).
+
+## Verifying the social layer
+
+Manual acceptance checklist for the phase-2 social layer — criteria 1–3 from the
+design spec (`docs/superpowers/specs/2026-07-22-social-layer-design.md` §11).
+Run these on the live site once at least one photographer is registered and has
+a Bluesky-sourced photo in the feed. You need two ATProto accounts: the
+**photographer** (registered on Luminance) and a **viewer** (any bsky account).
+The automated write-path proof for the same flow is
+`apps/web/integration/social.dev-env.test.ts`
+(`pnpm --filter web test:integration`) — this checklist confirms it against real
+Bluesky + real accounts end-to-end.
+
+- [ ] **Criterion 1 — like interop reaches Bluesky.** Sign in on Luminance as the
+  viewer (`/login`), open one of the photographer's photo pages, and click Like.
+  Then open the **photographer's Bluesky notifications** (bsky.app or the app) and
+  confirm the like appears there — it is a real `app.bsky.feed.like` in the
+  viewer's repo, so Bluesky's own AppView surfaces it. Confirm the like count on
+  the Luminance photo page ticked up and did not regress on refresh.
+- [ ] **Criterion 2 — comments render both directions.** Still signed in as the
+  viewer, post a comment on the same Luminance photo. (a) **Luminance → Bluesky:**
+  open the underlying post in the Bluesky app ("View on Bluesky" link on the photo
+  page) and confirm the comment shows in that post's thread. (b) **Bluesky →
+  Luminance:** from the Bluesky app, reply to the same post; within the photo
+  page's 60s thread cache (hard-refresh to force it) confirm that reply renders in
+  the Luminance comment thread.
+- [ ] **Criterion 3 — non-Luminance like reaches `/notifications` within a sweep +
+  1 min.** From a Bluesky account that is **not** signed in to Luminance, like the
+  photographer's underlying Bluesky post directly in the Bluesky app. Note the
+  time. Sign in to Luminance as the photographer and watch `/notifications`: the
+  like should appear within one engagement-sweep interval + ~1 min (the sweep is
+  what pulls externally-originated likes into the notification center; see the
+  engagement sweep in `apps/ingestor`). If it does not, check the ingestor logs
+  for the sweep tick and confirm the photographer's posts are within the swept
+  set.
