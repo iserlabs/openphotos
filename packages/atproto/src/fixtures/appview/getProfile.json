@@ -1,0 +1,22 @@
+{
+  "did": "did:plc:ka5oytd2d6rhs2r6yrvt6yb2",
+  "handle": "kevinleephotos.bsky.social",
+  "displayName": "Kevin K. Lee",
+  "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreibezjxmjkcgahtenp7he7oprbxy67mfq5cpofgfhqfjy6rrgkodri",
+  "associated": {
+    "lists": 0,
+    "feedgens": 0,
+    "starterPacks": 0,
+    "labeler": false,
+    "activitySubscription": {
+      "allowSubscriptions": "followers"
+    }
+  },
+  "labels": [],
+  "createdAt": "2025-09-04T17:31:42.398Z",
+  "description": "I have no idea what I'm doing. In NYC.",
+  "indexedAt": "2026-07-20T17:05:27.564Z",
+  "followersCount": 10,
+  "followsCount": 3,
+  "postsCount": 4
+}
