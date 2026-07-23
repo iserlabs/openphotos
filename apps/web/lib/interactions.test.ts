@@ -481,6 +481,20 @@ describe("deleteOwnComment", () => {
     expect(result.ok).toBe(false);
     expect(agentFactory).not.toHaveBeenCalled();
   });
+
+  it("rejects a non-comment collection (own profile record) BEFORE any deleteRecord", async () => {
+    // The uri is owned by the actor (passes the ownership check) but points at
+    // their own app.bsky.actor.profile/self — deleting it would nuke the
+    // viewer's profile. The collection guard must reject it as not-a-comment.
+    const db = await createTestDb();
+    const profileUri = `at://${VIEWER}/app.bsky.actor.profile/self`;
+    const { agent, deleteRecord } = makeFakeAgent();
+
+    const result = await deleteOwnComment(db, async () => agent, VIEWER, profileUri);
+
+    expect(result.ok).toBe(false);
+    expect(deleteRecord).not.toHaveBeenCalled();
+  });
 });
 
 describe("followPhotographer", () => {

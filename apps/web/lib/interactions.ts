@@ -358,6 +358,14 @@ export async function deleteOwnComment(
   }
   const parts = splitAtUri(recordUri);
   if (!parts) return { ok: false, error: "invalid comment" };
+  // Collection guard: a comment is an app.bsky.feed.post reply. Ownership alone
+  // is not enough — an actor owns their profile/like/follow records too, and a
+  // crafted recordUri (e.g. app.bsky.actor.profile/self) would otherwise let
+  // this deleteRecord a non-comment record in the viewer's own repo. Reject
+  // anything that isn't a feed.post BEFORE touching the agent/PDS.
+  if (parts.collection !== POST_COLLECTION) {
+    return { ok: false, error: "not a comment" };
+  }
 
   const agent = await agentFactory(actorDid);
   try {
