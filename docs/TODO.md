@@ -28,10 +28,10 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [ ] Then phase 3 (publisher core + tooling — klee.photos as flagship) and phase 4 (full-service onboarding: account provisioning, DNS wizard, site sync)
 
 ## 3. Deferred fast-follows (filed during Foundation review; none block launch)
-- [x] **"Refresh my photos" button in /settings** (shipped 2026-07-23) — photographer-initiated re-arm (sets backfill_status=pending); gives sub-minute freshness for own posts without waiting for the 15-min reconcile while Jetstream keeps starving this PDS
+- [x] **"Refresh my photos" button in /settings** (shipped 2026-07-23; now a fallback — the freshness probe makes indexing automatic) — photographer-initiated re-arm (sets backfill_status=pending); gives sub-minute freshness for own posts without waiting for the 15-min reconcile while Jetstream keeps starving this PDS
 
 
-- [ ] **Perf: responsive image renditions** — add a ~640px preset + srcset/sizes on grid tiles (mobile LCP is transfer-bound: 112-344KB avif at 1024px over throttled links); consider blur-up placeholders. Goal: mobile Lighthouse ≥ 90 (criterion 4)
+- [~] **Perf: responsive image renditions** (srcset shipped grid+detail + ingestor cache-warming 2026-07-23; blur-up placeholder + mobile Lighthouse re-run still open) — add a ~640px preset + srcset/sizes on grid tiles (mobile LCP is transfer-bound: 112-344KB avif at 1024px over throttled links); consider blur-up placeholders. Goal: mobile Lighthouse ≥ 90 (criterion 4)
 - [ ] **Cursor-lag alert false-positives** — with a quiet single-DID filter, no events = lag grows at wall-clock rate and the >300s alert fires though nothing is wrong; distinguish "no events to consume" from "falling behind"
 - [ ] **Next 16 params encoding regression test** — pages get percent-encoded params, route handlers decoded (bit us in prod: photo pages 404'd); the deferred Playwright suite must cover a photo-page navigation
 

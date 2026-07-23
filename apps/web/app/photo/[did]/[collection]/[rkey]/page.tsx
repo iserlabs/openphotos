@@ -185,6 +185,8 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/full`}
+                    srcSet={`/img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/feed 1024w, /img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/full 2048w`}
+                    sizes="(min-width: 768px) 720px, 100vw"
                     alt={photo.alt ?? ""}
                     width={photo.width ?? undefined}
                     height={photo.height ?? undefined}

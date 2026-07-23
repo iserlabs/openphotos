@@ -6,6 +6,7 @@ import {
 } from "@luminance/atproto";
 import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
 import type { Indexer } from "./indexer.js";
+import { warmNewPhotos } from "./warm-cache.js";
 
 const MAX_PER_COLLECTION = 5000; // spec §9
 const WATCHED = [LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS];
@@ -152,7 +153,12 @@ export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000,
       }
       const pending = await db.select().from(photographers)
         .where(and(eq(photographers.backfillStatus, "pending"), ne(photographers.status, "deregistered")));
-      for (const p of pending) await runBackfill(db, indexer, p.did);
+      for (const p of pending) {
+        await runBackfill(db, indexer, p.did);
+        // Pre-request fresh renditions so the first viewer hits the CDN, not
+        // a cold PDS-fetch+encode (no-op unless WARM_BASE_URL is set).
+        void warmNewPhotos(db, p.did).catch(() => {});
+      }
     } catch (err) {
       console.error("backfill loop: tick failed, will retry next interval", err);
     }

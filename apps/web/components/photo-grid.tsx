@@ -43,11 +43,14 @@ export function PhotoGrid({
         const parts = splitAtUri(p.atUri);
         if (!parts) return null;
         const c = counts?.get(p.atUri);
+        const imgBase = `/img/${encodeURIComponent(p.did)}/${encodeURIComponent(p.blobCid)}`;
         return (
           <PhotoCard
             key={`${p.atUri}#${p.mediaIndex}`}
             href={`/photo/${encodeURIComponent(parts.did)}/${parts.collection}/${parts.rkey}#i${p.mediaIndex}`}
-            src={`/img/${encodeURIComponent(p.did)}/${encodeURIComponent(p.blobCid)}/feed`}
+            src={`${imgBase}/feed`}
+            srcSet={`${imgBase}/thumb 512w, ${imgBase}/feed 1024w`}
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             alt={p.alt ?? ""}
             width={p.width}
             height={p.height}

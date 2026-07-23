@@ -71,6 +71,9 @@ export function PhotoCard({
    */
   likeCount?: number;
   replyCount?: number;
+  /** Responsive renditions — browsers pick the smallest sufficient file. */
+  srcSet?: string;
+  sizes?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
 
@@ -79,6 +82,8 @@ export function PhotoCard({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
+        srcSet={srcSet}
+        sizes={sizes}
         alt={alt}
         width={width ?? undefined}
         height={height ?? undefined}

@@ -8,6 +8,7 @@ import { Indexer } from "./indexer.js";
 import { JetstreamConsumer } from "./jetstream.js";
 import { startHealthServer } from "./health.js";
 import { startBackfillLoop } from "./backfill.js";
+import { createFreshnessProbe } from "./freshness-probe.js";
 import { cursorLagSeconds } from "./cursor-lag.js";
 import { startEngagementSweep } from "./engagement-sweep.js";
 
@@ -80,6 +81,7 @@ async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   startHealthServer(indexer.stats, config.HEALTH_PORT);
   const backfillTimer = startBackfillLoop(db, indexer); // graceful shutdown will clear this
   const cursorLagTimer = startCursorLagMonitor(db); // graceful shutdown will clear this
+  const freshnessProbe = createFreshnessProbe(db); freshnessProbe.start(); // asks each PDS for its repo rev — automatic freshness while Jetstream starves this PDS
   const engagementSweep = startEngagementSweep(db, new AppView()); // graceful shutdown will clear this
   await consumer.start();
 }
