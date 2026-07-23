@@ -2,13 +2,14 @@ import { Sentry, sentryEnabled } from "./sentry.js"; // must be imported first: 
 import { ne, eq } from "drizzle-orm";
 import { createDb, photographers, ingestCursors, type Db } from "@luminance/db";
 import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
-import { GRAIN_COLLECTIONS } from "@luminance/atproto";
+import { GRAIN_COLLECTIONS, AppView } from "@luminance/atproto";
 import { config } from "./config.js";
 import { Indexer } from "./indexer.js";
 import { JetstreamConsumer } from "./jetstream.js";
 import { startHealthServer } from "./health.js";
 import { startBackfillLoop } from "./backfill.js";
 import { cursorLagSeconds } from "./cursor-lag.js";
+import { startEngagementSweep } from "./engagement-sweep.js";
 
 const CURSOR_LAG_CONNECTION_ID = "main"; // matches JetstreamConsumer's connectionId below
 const CURSOR_LAG_CHECK_INTERVAL_MS = 60_000;
@@ -60,9 +61,10 @@ function startCursorLagMonitor(db: Db): ReturnType<typeof setInterval> {
 
 /**
  * Everything that should run for the life of the process besides one-shot
- * setup: the Jetstream consumer, the health server, and the backfill-runner
- * loop (polls photographers with backfillStatus 'pending' and drives each
- * through a PDS listRecords backfill).
+ * setup: the Jetstream consumer, the health server, the backfill-runner loop
+ * (polls photographers with backfillStatus 'pending' and drives each through
+ * a PDS listRecords backfill), and the engagement sweep (registered
+ * photographers' bsky-source post counts + notification diffing, spec §5).
  */
 async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   const consumer = new JetstreamConsumer({
@@ -78,6 +80,7 @@ async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   startHealthServer(indexer.stats, config.HEALTH_PORT);
   const backfillTimer = startBackfillLoop(db, indexer); // graceful shutdown will clear this
   const cursorLagTimer = startCursorLagMonitor(db); // graceful shutdown will clear this
+  const engagementSweep = startEngagementSweep(db, new AppView()); // graceful shutdown will clear this
   await consumer.start();
 }
 
