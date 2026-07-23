@@ -9,11 +9,13 @@ import {
   pushNotification,
   type Db,
 } from "@luminance/db";
-import { buildLikeRecord } from "@luminance/atproto";
+import { buildLikeRecord, buildReplyRecord, buildFollowRecord } from "@luminance/atproto";
 import { getOAuthClient } from "./oauth";
 import { splitAtUri } from "./queries";
 
 const LIKE_COLLECTION = "app.bsky.feed.like";
+const POST_COLLECTION = "app.bsky.feed.post";
+const FOLLOW_COLLECTION = "app.bsky.graph.follow";
 
 // ---- router (spec §2) -----------------------------------------------------
 
@@ -229,6 +231,225 @@ export async function unlikePhoto(
     } catch {
       return { ok: false, error: "unliked on Bluesky, but syncing to Luminance failed — it will appear shortly" };
     }
+  }
+
+  return { ok: true };
+}
+
+// ---- comment / delete-own-comment (spec §4) ---------------------------------
+
+export type CommentInput = {
+  /** The photo's underlying post — reply `root`, and the interactions row's `subjectUri`. */
+  subject: { uri: string; cid: string };
+  /** The record being replied to; defaults to `subject` for a top-level comment. */
+  parent?: { uri: string; cid: string };
+  text: string;
+  /** DID of the photo's photographer — notification recipient (unless self-comment). */
+  photographerDid: string;
+  /** The photo page's at-uri — notification `linkUri` (spec §3). */
+  photoLinkUri: string;
+};
+
+/**
+ * Comment on a photo: create an `app.bsky.feed.post` reply in the viewer's own
+ * repo, THEN write through to `interactions` (+ a notification when the
+ * photographer is registered and isn't the actor themself).
+ *
+ * Mirrors {@link likePhoto}'s ordering contract (record-first; DB half is
+ * best-effort). Rate limit is asserted first, before any PDS write — see the
+ * Task 5 review carry: `assertRateLimit` has no shared enforcement point, so
+ * every write path (like/comment/follow) must call it itself.
+ *
+ * Grapheme-count violations from `buildReplyRecord` are caught and surfaced as
+ * `{ok:false, error}` — never a throw — so the UI can render inline validation
+ * instead of an uncaught server-action error.
+ */
+export async function commentOnPhoto(
+  db: Db,
+  agentFactory: AgentFactory,
+  actorDid: string,
+  actorHandle: string,
+  input: CommentInput,
+): Promise<ServiceResult> {
+  await assertRateLimit(db, actorDid);
+
+  const parent = input.parent ?? input.subject;
+  let record: ReturnType<typeof buildReplyRecord>;
+  try {
+    record = buildReplyRecord(input.text, input.subject, parent);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "invalid comment" };
+  }
+
+  const agent = await agentFactory(actorDid);
+  let created: { uri: string; cid: string };
+  try {
+    const res = await agent.com.atproto.repo.createRecord({
+      repo: actorDid,
+      collection: POST_COLLECTION,
+      record,
+    });
+    created = res.data;
+  } catch {
+    return { ok: false, error: "could not create the comment on Bluesky" };
+  }
+
+  try {
+    await recordInteraction(db, {
+      recordUri: created.uri,
+      actorDid,
+      kind: "comment",
+      subjectUri: input.subject.uri,
+      text: input.text,
+      recordCid: created.cid,
+    });
+    if (input.photographerDid !== actorDid && (await isRegisteredPhotographer(db, input.photographerDid))) {
+      await pushNotification(db, {
+        recipientDid: input.photographerDid,
+        actorDid,
+        actorHandle,
+        kind: "comment",
+        // The reply's own record uri is the dedupe identity here (schema §3) —
+        // unlike a like (one per post), a viewer can leave many comments on the
+        // same photo and each is its own notification.
+        subjectUri: created.uri,
+        linkUri: input.photoLinkUri,
+        snippet: input.text.slice(0, 140),
+      });
+    }
+  } catch {
+    return { ok: false, error: "commented on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Delete the viewer's own comment: ownership is enforced by construction — the
+ * record's repo DID (parsed from `recordUri`) must equal `actorDid` — before
+ * ever touching the agent or the PDS.
+ */
+export async function deleteOwnComment(
+  db: Db,
+  agentFactory: AgentFactory,
+  actorDid: string,
+  recordUri: string,
+): Promise<ServiceResult> {
+  if (!recordUri.startsWith(`at://${actorDid}/`)) {
+    return { ok: false, error: "you can only delete your own comments" };
+  }
+  const parts = splitAtUri(recordUri);
+  if (!parts) return { ok: false, error: "invalid comment" };
+
+  const agent = await agentFactory(actorDid);
+  try {
+    await agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: parts.collection, rkey: parts.rkey });
+  } catch {
+    return { ok: false, error: "could not delete the comment on Bluesky" };
+  }
+
+  try {
+    await softDeleteInteraction(db, recordUri);
+  } catch {
+    return { ok: false, error: "deleted on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+  }
+
+  return { ok: true };
+}
+
+// ---- follow / unfollow (spec §4) --------------------------------------------
+
+export type FollowTarget = {
+  photographerDid: string;
+  /** Photographer's handle at follow time — notification `linkUri` (spec §3). */
+  photographerHandle: string;
+};
+
+/**
+ * Follow a photographer: create `app.bsky.graph.follow` in the viewer's own
+ * repo, THEN write through to `interactions` (+ a notification when the
+ * photographer is registered and isn't the actor themself).
+ *
+ * Rate limit is asserted first, before any PDS write (same trap as
+ * {@link commentOnPhoto} — no shared enforcement point).
+ */
+export async function followPhotographer(
+  db: Db,
+  agentFactory: AgentFactory,
+  actorDid: string,
+  actorHandle: string,
+  target: FollowTarget,
+): Promise<ServiceResult> {
+  await assertRateLimit(db, actorDid);
+
+  const agent = await agentFactory(actorDid);
+  let created: { uri: string; cid: string };
+  try {
+    const res = await agent.com.atproto.repo.createRecord({
+      repo: actorDid,
+      collection: FOLLOW_COLLECTION,
+      record: buildFollowRecord(target.photographerDid),
+    });
+    created = res.data;
+  } catch {
+    return { ok: false, error: "could not follow on Bluesky" };
+  }
+
+  try {
+    await recordInteraction(db, {
+      recordUri: created.uri,
+      actorDid,
+      kind: "follow",
+      subjectUri: target.photographerDid,
+    });
+    if (target.photographerDid !== actorDid && (await isRegisteredPhotographer(db, target.photographerDid))) {
+      await pushNotification(db, {
+        recipientDid: target.photographerDid,
+        actorDid,
+        actorHandle,
+        kind: "follow",
+        subjectUri: target.photographerDid,
+        linkUri: `/${target.photographerHandle}`,
+        snippet: null,
+      });
+    }
+  } catch {
+    return { ok: false, error: "followed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Unfollow a photographer: resolve the follow record's rkey from the stored
+ * `interactions` row and `deleteRecord` it, then soft-delete the local row.
+ *
+ * Unlike {@link unlikePhoto}, there is NO paging fallback here — a missing row
+ * surfaces as `{ok:false}` pointing the viewer at the Bluesky app. Follows
+ * aren't subject-scannable the same way (no stable per-photo subject uri to
+ * match on), so the fallback isn't worth the complexity for this action.
+ */
+export async function unfollowPhotographer(
+  db: Db,
+  agentFactory: AgentFactory,
+  actorDid: string,
+  photographerDid: string,
+): Promise<ServiceResult> {
+  const existing = await findInteraction(db, actorDid, "follow", photographerDid);
+  const rkey = existing ? splitAtUri(existing.recordUri)?.rkey : null;
+  if (!existing || !rkey) return { ok: false, error: "unfollow in your Bluesky app" };
+
+  const agent = await agentFactory(actorDid);
+  try {
+    await agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: FOLLOW_COLLECTION, rkey });
+  } catch {
+    return { ok: false, error: "could not unfollow on Bluesky" };
+  }
+
+  try {
+    await softDeleteInteraction(db, existing.recordUri);
+  } catch {
+    return { ok: false, error: "unfollowed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
   }
 
   return { ok: true };
