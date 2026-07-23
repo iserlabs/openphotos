@@ -138,10 +138,10 @@ async function applyOne(indexer: Indexer, ctx: Ctx, record: any) {
   }
 }
 
-export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000, reconcileIntervalMs = 60 * 60 * 1000) {
+export function startBackfillLoop(db: Db, indexer: Indexer, intervalMs = 10_000, reconcileIntervalMs = 15 * 60 * 1000) {
   // Periodic reconciliation: the firehose is best-effort delivery (observed in
   // production: Jetstream lagging a PDS by 30+ min, dropping deletes/creates).
-  // Re-arming every active photographer hourly bounds staleness at
+  // Re-arming every active photographer every 15 min bounds staleness at
   // ~reconcileIntervalMs regardless of upstream health — PDS truth wins.
   let lastReconcile = Date.now();
   return setInterval(async () => {
