@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { photographers } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { requestRefresh } from "@/lib/refresh";
 import {
   setHiddenForDid,
   deregisterDid,
@@ -78,4 +79,18 @@ export async function adminTakedown(formData: FormData) {
 
   await adminTakedownRow(getDb(), atUri, mediaIndex, reason);
   revalidatePath("/settings");
+}
+
+/**
+ * Photographer-initiated re-index (see lib/refresh.ts). Full containment: any
+ * unexpected throw stays server-side; the page re-renders with fresh status.
+ */
+export async function refreshPhotos() {
+  try {
+    const session = await getSession();
+    await requestRefresh(getDb(), session.did ?? null);
+    revalidatePath("/settings");
+  } catch {
+    // Swallow — the settings page's status line reflects reality on rerender.
+  }
 }
