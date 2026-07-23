@@ -22,8 +22,8 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 
 ## 2. Phase 2 spec — social layer (continue after launch)
 
-- [ ] **Brainstorm + spec the social layer** (likes / comments / follows as ATProto records, notifications, engagement display). Same pipeline as Foundation: brainstorm → spec → plan → subagent execution.
-  - Key open decision (Foundation spec §14): interactions via Bluesky's lexicons (max interop) vs `social.luminance.*` (portfolio-grade semantics)
+- [x] **Brainstorm + spec the social layer** (likes / comments / follows as ATProto records, notifications, engagement display) — specced (`docs/superpowers/specs/2026-07-22-social-layer-design.md`), planned, and built on `feature/social-layer` (2026-07-23). **Decision resolved: Bluesky's own lexicons** (`app.bsky.feed.like` / `app.bsky.feed.post` replies / `app.bsky.graph.follow`) for maximum interop — viewer likes/comments/follows land as real records in the viewer's repo and reach the photographer's Bluesky notifications. Shipped: interaction service (write-through rows + notifications + engagement deltas), notifications center, engagement sweep, and a dev-env write-path integration test (`apps/web/integration/social.dev-env.test.ts`).
+  - Key open decision (Foundation spec §14): interactions via Bluesky's lexicons (max interop) vs `social.luminance.*` (portfolio-grade semantics) — **chose Bluesky lexicons**; `social.luminance.*` interactions deferred to phase 3 (router branch stubbed, spec §10)
   - Prereq already in place: ingestor is a connection manager, ready for a second collection-filtered Jetstream subscription; photos use strong refs
 - [ ] Then phase 3 (publisher core + tooling — klee.photos as flagship) and phase 4 (full-service onboarding: account provisioning, DNS wizard, site sync)
 
@@ -43,3 +43,10 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [ ] Admin audit log (actor DID + action) before multi-admin
 - [ ] Run `test:integration` (SQLite-native, no infra) in CI as a merge gate or nightly
 - [ ] Assorted minors: profile page load-more past 60 photos, React.cache dedup for metadata queries, purge-vs-inflight-backfill race, `getSeries` cover for Grain galleries
+
+### Phase-2 social-layer carried minors (filed during task reviews; none block the branch merge)
+
+- [ ] **Delete-button pending/error feedback** — the comment delete `<form>` in `apps/web/components/comment-thread.tsx` discards the action result, so a failed delete leaves the comment in place with no signal. Add a pending/error affordance.
+- [ ] **Notifications-page avatar scheme check** — confirm `/notifications` runs actor avatar URLs through the same `safeExternalHref` scheme-check the comment thread uses (AppView/DB avatar URLs are untrusted input).
+- [ ] **Shared photographer-lookup helper consolidation** — `isRegisteredPhotographer` / `getActivePhotographer` (`apps/web/lib/interactions.ts`) and `getPhotographerByHandle` (`apps/web/lib/queries.ts`) overlap; consolidate into one active-photographer lookup.
+- [ ] **Comment/follow DB-half self-heal test parity** — `interactions.test.ts` proves the record-first / DB-half-failure `{ok:false}` path for `likePhoto`; add the equivalent coverage for `commentOnPhoto` and `followPhotographer`.
