@@ -54,6 +54,8 @@ export function PhotoCard({
   priority = false,
   likeCount,
   replyCount,
+  srcSet,
+  sizes,
 }: {
   href: string;
   src: string;
