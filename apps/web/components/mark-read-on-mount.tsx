@@ -24,7 +24,8 @@ export function MarkReadOnMount({ ids }: { ids: number[] }) {
 
   useEffect(() => {
     if (!ids.length) return;
-    void markReadAction(ids).then(() => router.refresh());
+    // Swallow a failed mark-read: the unread badge stays stale until the next natural refresh — acceptable, and better than an unhandled promise rejection.
+    void markReadAction(ids).then(() => router.refresh()).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

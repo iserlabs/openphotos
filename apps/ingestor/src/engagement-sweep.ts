@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { photographers, photos, engagement, interactions, pushNotification, ABSORPTION_GRACE_MS, type Db } from "@luminance/db";
 import type { PostView, ThreadView, LikeView, ActorView } from "@luminance/atproto";
+import { graphemeSlice } from "@luminance/atproto";
 import { Sentry, sentryEnabled } from "./sentry.js";
 
 // ---- Injected AppView surface ---------------------------------------------
@@ -92,7 +93,9 @@ async function notifyReplies(db: Db, nodes: ThreadView[], photographerDid: strin
         kind: "comment",
         subjectUri: node.post.uri,
         linkUri: rootUri,
-        snippet: (node.post.record?.text ?? "").slice(0, SNIPPET_LEN),
+        // grapheme-safe: a bare .slice(0, 140) would split surrogate pairs /
+        // multi-code-point emoji at the boundary (matches commentOnPhoto).
+        snippet: graphemeSlice(node.post.record?.text ?? "", SNIPPET_LEN),
       });
     }
     if (node.replies?.length) await notifyReplies(db, node.replies, photographerDid, rootUri);
@@ -130,21 +133,26 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
   const sweepIndex = opts.sweepIndex ?? 0;
   const now = new Date();
 
-  const scoped = await scopedPosts(db);
-  const postUris = scoped.map((s) => s.atUri);
-  const photographerByUri = new Map(scoped.map((s) => [s.atUri, { did: s.did, handle: s.handle }]));
-
-  const prevRows = postUris.length ? await db.select().from(engagement).where(inArray(engagement.postUri, postUris)) : [];
-  const prevByUri = new Map(prevRows.map((r) => [r.postUri, r]));
-  checkStaleness(prevRows);
-
   let postRequests = 0;
   let likeRequests = 0;
   let replyRequests = 0;
   let followerRequests = 0;
   let aborted = false;
 
+  // The WHOLE tick is inside the try — scope query, prev-rows read, the fan-out
+  // loops, AND the prune — so any failure (a 429 mid-loop, a transient DB blip
+  // on the scope/prev reads) aborts THIS tick cleanly and the function always
+  // resolves. 429-abort semantics are unchanged: rows upserted before the throw
+  // are kept, and the next tick resumes from current DB state.
   try {
+    const scoped = await scopedPosts(db);
+    const postUris = scoped.map((s) => s.atUri);
+    const photographerByUri = new Map(scoped.map((s) => [s.atUri, { did: s.did, handle: s.handle }]));
+
+    const prevRows = postUris.length ? await db.select().from(engagement).where(inArray(engagement.postUri, postUris)) : [];
+    const prevByUri = new Map(prevRows.map((r) => [r.postUri, r]));
+    checkStaleness(prevRows);
+
     if (postUris.length) {
       postRequests = Math.ceil(postUris.length / 25);
       const posts = await appview.getPosts(postUris);
@@ -211,6 +219,8 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
         }
       }
     }
+
+    await pruneAbsorbedInteractions(db);
   } catch (err) {
     aborted = true;
     if (isRateLimited(err)) {
@@ -219,8 +229,6 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
       console.error("engagement_sweep: tick failed, aborting", err);
     }
   }
-
-  await pruneAbsorbedInteractions(db);
 
   const requestsPerSweep = postRequests + likeRequests + replyRequests + followerRequests;
   const intervalMs = governedIntervalMs(requestsPerSweep);
