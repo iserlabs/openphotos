@@ -23,12 +23,26 @@ export interface GridPhoto {
  * `#i{mediaIndex}` anchor so a tap on one image of a multi-image post lands
  * on that image specifically.
  */
-export function PhotoGrid({ items }: { items: GridPhoto[] }) {
+export function PhotoGrid({
+  items,
+  counts,
+}: {
+  items: GridPhoto[];
+  /**
+   * Engagement counts keyed by post at-uri (spec §3) — one entry serves
+   * every mediaIndex tile of the same post. Callers fetch this with a
+   * SINGLE `engagementFor` call per page render (never per-tile); omitted
+   * entirely (or missing a given key) simply renders that tile without an
+   * overlay.
+   */
+  counts?: Map<string, { likeCount: number; replyCount: number }>;
+}) {
   return (
     <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
       {items.map((p, i) => {
         const parts = splitAtUri(p.atUri);
         if (!parts) return null;
+        const c = counts?.get(p.atUri);
         return (
           <PhotoCard
             key={`${p.atUri}#${p.mediaIndex}`}
@@ -39,6 +53,8 @@ export function PhotoGrid({ items }: { items: GridPhoto[] }) {
             height={p.height}
             sensitive={isSensitive(p.labels)}
             priority={i === 0}
+            likeCount={c?.likeCount}
+            replyCount={c?.replyCount}
           />
         );
       })}

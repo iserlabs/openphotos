@@ -15,6 +15,20 @@
       "when": 1784672254952,
       "tag": "0001_series_item_uri",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784817271137,
+      "tag": "0002_social_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784817975297,
+      "tag": "0003_notifications_index_fix",
+      "breakpoints": true
     }
   ]
 }

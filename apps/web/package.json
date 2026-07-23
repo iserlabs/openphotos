@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@atproto/api": "^0.20.31",
     "@atproto/jwk-jose": "^0.2.4",
     "@atproto/oauth-client-node": "^0.4.9",
     "@luminance/atproto": "workspace:*",
@@ -24,6 +27,8 @@
     "sharp": "^0.34.4"
   },
   "devDependencies": {
+    "@atproto/dev-env": "^0.5.36",
+    "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
