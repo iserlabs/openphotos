@@ -258,4 +258,30 @@ describe("unlikePhoto", () => {
     expect(listRecords).toHaveBeenCalledTimes(10);
     expect(deleteRecord).not.toHaveBeenCalled();
   });
+
+  it("falls back to paging when stored recordUri is unparseable", async () => {
+    const db = await createTestDb();
+    // Store an interaction with a garbage recordUri that can't be split
+    await db.insert(interactions).values({
+      recordUri: "invalid:garbage:format",
+      actorDid: VIEWER,
+      kind: "like",
+      subjectUri: POST_URI,
+    });
+    const page1 = {
+      data: {
+        records: [
+          { uri: "at://did:plc:viewer/app.bsky.feed.like/found1", cid: "c1", value: { subject: { uri: POST_URI } } },
+        ],
+      },
+    };
+    const { agent, deleteRecord, listRecords } = makeFakeAgent({ listRecords: async () => page1 });
+
+    const result = await unlikePhoto(db, async () => agent, VIEWER, POST_URI);
+
+    expect(result).toEqual({ ok: true });
+    // Proves we paged instead of giving up
+    expect(listRecords).toHaveBeenCalledTimes(1);
+    expect(deleteRecord).toHaveBeenCalledWith({ repo: VIEWER, collection: "app.bsky.feed.like", rkey: "found1" });
+  });
 });

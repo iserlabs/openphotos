@@ -207,7 +207,14 @@ export async function unlikePhoto(
   const agent = await agentFactory(actorDid);
   const existing = await findInteraction(db, actorDid, "like", subjectUri);
 
-  const rkey = existing ? splitAtUri(existing.recordUri)?.rkey : await findLikeRkeyByPaging(agent, actorDid, subjectUri);
+  // Try to parse rkey from stored record; fall back to paging if missing or unparseable
+  let rkey: string | null = null;
+  if (existing) {
+    rkey = splitAtUri(existing.recordUri)?.rkey ?? null;
+  }
+  if (!rkey) {
+    rkey = await findLikeRkeyByPaging(agent, actorDid, subjectUri);
+  }
   if (!rkey) return { ok: false, error: "unlike in your Bluesky app" };
 
   try {

@@ -1,8 +1,14 @@
+import path from "path";
 import { defineConfig } from "vitest/config";
 
 // Node environment: this app's tests exercise server-side code (lib/*, route
 // handlers) rather than rendered components, so no DOM environment is needed.
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "."),
+    },
+  },
   test: {
     environment: "node",
     // PGlite-backed tests (createTestDb) cold-start WASM Postgres; CI runners

@@ -1,5 +1,6 @@
 "use server";
 
+import type { Db } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { getPhotoRecord } from "@/lib/queries";
@@ -7,20 +8,22 @@ import { routeInteraction, likePhoto, unlikePhoto, restoreAgent, RateLimitError 
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
+type SessionLike = { did?: string; handle?: string };
+
 /**
- * Server actions for the photo page's like button. Both are session-checked,
- * dispatch to the `lib/interactions.ts` service, and translate every failure
- * mode — including a rate-limit rejection — into `{ok:false, error}` so the
- * client component never has to catch a thrown server-action error.
+ * Pure core for likeAction: no coupling to iron-session or Next context.
+ * Wrap with try/catch in the server action to handle getSession/getDb failures.
  */
-export async function likeAction(formData: FormData): Promise<ActionResult> {
-  const session = await getSession();
+export async function likeActionCore(
+  db: Db,
+  session: SessionLike,
+  formData: FormData,
+): Promise<ActionResult> {
   if (!session.did) return { ok: false, error: "sign in to like this photo" };
 
   const atUri = String(formData.get("atUri") ?? "");
   if (!atUri) return { ok: false, error: "missing photo" };
 
-  const db = getDb();
   const record = await getPhotoRecord(db, atUri);
   if (!record) return { ok: false, error: "photo not found" };
 
@@ -41,18 +44,51 @@ export async function likeAction(formData: FormData): Promise<ActionResult> {
   }
 }
 
-export async function unlikeAction(formData: FormData): Promise<ActionResult> {
-  const session = await getSession();
+/**
+ * Server actions for the photo page's like button. Both are session-checked,
+ * dispatch to the `lib/interactions.ts` service, and translate every failure
+ * mode — including a rate-limit rejection — into `{ok:false, error}` so the
+ * client component never has to catch a thrown server-action error.
+ * The entire body is wrapped in try/catch to ensure getSession() and getDb()
+ * errors never escape as uncaught server-action errors.
+ */
+export async function likeAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    const db = getDb();
+    return await likeActionCore(db, session, formData);
+  } catch (err) {
+    return { ok: false, error: "something went wrong — please try again" };
+  }
+}
+
+/**
+ * Pure core for unlikeAction: no coupling to iron-session or Next context.
+ */
+export async function unlikeActionCore(
+  db: Db,
+  session: SessionLike,
+  formData: FormData,
+): Promise<ActionResult> {
   if (!session.did) return { ok: false, error: "sign in to like this photo" };
 
   const atUri = String(formData.get("atUri") ?? "");
   if (!atUri) return { ok: false, error: "missing photo" };
 
-  const db = getDb();
   try {
     return await unlikePhoto(db, (did) => restoreAgent(db, did), session.did, atUri);
   } catch (err) {
     if (err instanceof RateLimitError) return { ok: false, error: "Slow down — you're interacting a lot right now." };
+    return { ok: false, error: "something went wrong — please try again" };
+  }
+}
+
+export async function unlikeAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    const db = getDb();
+    return await unlikeActionCore(db, session, formData);
+  } catch (err) {
     return { ok: false, error: "something went wrong — please try again" };
   }
 }
