@@ -72,7 +72,7 @@ export function flattenThread(thread: ThreadView, opts: { maxDepth: number }): C
       if (!post) continue; // blocked/notFound stub — render as absent
 
       const children = node.replies;
-      const hasChildren = !!children && children.length > 0;
+      const hasChildren = !!children && children.some((c) => c?.post != null);
       const clipped = depth >= maxDepth - 1 && hasChildren;
 
       out.push({

@@ -46,7 +46,11 @@ export function CommentComposer({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const count = useMemo(() => graphemeCount(text), [text]);
+  // Count graphemes on the trimmed text, matching the server's own
+  // trim-then-validate order (packages/atproto/src/interaction-records.ts) —
+  // otherwise leading/trailing whitespace could push the client-side counter
+  // and block over a limit the server wouldn't actually enforce.
+  const count = useMemo(() => graphemeCount(text.trim()), [text]);
   const overLimit = count > MAX_GRAPHEMES;
   const empty = text.trim().length === 0;
 

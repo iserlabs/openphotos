@@ -83,33 +83,46 @@ export default async function ProfilePage({
   const session = await getSession();
   const isOwnProfile = session.did === photographer.did;
 
-  const [{ items }, seriesRows, followerCount, viewerFollow] = await Promise.all([
-    feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did }),
-    db
-      .select({
-        atUri: seriesTable.atUri,
-        title: seriesTable.title,
-        // Suppress the cover thumbnail when it's hidden/taken-down, but keep the
-        // series in the shelf (hence CASE rather than a WHERE filter).
-        coverBlobCid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.blobCid} end`,
-        coverDid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.did} end`,
-      })
-      .from(seriesTable)
-      .leftJoin(photos, and(eq(photos.atUri, seriesTable.coverPhotoUri), eq(photos.mediaIndex, 0)))
-      .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
-      .where(eq(seriesTable.did, photographer.did)),
-    getFollowerCount(photographer.did),
-    // Write-through truth (spec-honest seam, see FollowButton doc comment):
-    // reflects follows made through Luminance, not necessarily the live
-    // Bluesky graph. Skipped entirely when signed out — nothing to look up.
-    session.did && !isOwnProfile ? findInteraction(db, session.did, "follow", photographer.did) : Promise.resolve(null),
-  ]);
+  // `items` must resolve before we know which atUris to hand to `engagementFor`,
+  // but the other three queries below have no dependency on it — kick every
+  // promise off up front, await only the blocking one here, then fold
+  // `engagementFor` into a single Promise.all with the rest so it runs
+  // concurrently with whichever of them is still in flight instead of being
+  // awaited sequentially after all four already resolved.
+  const itemsPromise = feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did });
+  const seriesRowsPromise = db
+    .select({
+      atUri: seriesTable.atUri,
+      title: seriesTable.title,
+      // Suppress the cover thumbnail when it's hidden/taken-down, but keep the
+      // series in the shelf (hence CASE rather than a WHERE filter).
+      coverBlobCid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.blobCid} end`,
+      coverDid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.did} end`,
+    })
+    .from(seriesTable)
+    .leftJoin(photos, and(eq(photos.atUri, seriesTable.coverPhotoUri), eq(photos.mediaIndex, 0)))
+    .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
+    .where(eq(seriesTable.did, photographer.did));
+  const followerCountPromise = getFollowerCount(photographer.did);
+  // Write-through truth (spec-honest seam, see FollowButton doc comment):
+  // reflects follows made through Luminance, not necessarily the live
+  // Bluesky graph. Skipped entirely when signed out — nothing to look up.
+  const viewerFollowPromise =
+    session.did && !isOwnProfile ? findInteraction(db, session.did, "follow", photographer.did) : Promise.resolve(null);
+
+  const { items } = await itemsPromise;
 
   // ONE grouped engagementFor call per page render (spec §3 constraint —
   // never per-tile). Only bsky-source posts have real engagement; dedupe
   // atUris since a multi-image post repeats its atUri across mediaIndex rows.
   const bskyUris = [...new Set(items.filter((p) => p.source === "bsky").map((p) => p.atUri))];
-  const counts = await engagementFor(db, bskyUris);
+
+  const [seriesRows, followerCount, viewerFollow, counts] = await Promise.all([
+    seriesRowsPromise,
+    followerCountPromise,
+    viewerFollowPromise,
+    engagementFor(db, bskyUris),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -155,6 +168,7 @@ export default async function ProfilePage({
         {!isOwnProfile ? (
           <div className="flex-none">
             <FollowButton
+              key={photographer.did}
               photographerDid={photographer.did}
               photographerHandle={photographer.handle}
               signedIn={Boolean(session.did)}

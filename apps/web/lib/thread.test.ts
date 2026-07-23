@@ -144,6 +144,58 @@ describe("flattenThread", () => {
     expect(nodes[0].hasMore).toBe(false);
   });
 
+  it("does not flag hasMore when a cutoff-depth node's only children are blocked/notFound stubs", () => {
+    // B sits at depth 1, the deepest included depth for maxDepth 2 — i.e. the
+    // clipping boundary. B's only "replies" are a stub with no `.post`, so
+    // there is no real content being clipped; hasMore must read false.
+    const thread = threadWithReplies([
+      reply({
+        uri: "at://did:plc:aaa/app.bsky.feed.post/a",
+        author: AUTHOR_A,
+        replies: [
+          reply({
+            uri: "at://did:plc:bbb/app.bsky.feed.post/b",
+            author: AUTHOR_B,
+            replies: [blockedStub("at://did:plc:blocked/app.bsky.feed.post/z")],
+          }),
+        ],
+      }),
+    ]);
+
+    const nodes = flattenThread(thread, { maxDepth: 2 });
+
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1].uri).toBe("at://did:plc:bbb/app.bsky.feed.post/b");
+    expect(nodes[1].hasMore).toBe(false);
+  });
+
+  it("flags hasMore when a cutoff-depth node has a real (non-stub) child clipped", () => {
+    // Companion case to the stub-only test above: B at the same depth-1
+    // cutoff, but its clipped child is a real reply (has `.post`) — hasMore
+    // must read true.
+    const thread = threadWithReplies([
+      reply({
+        uri: "at://did:plc:aaa/app.bsky.feed.post/a",
+        author: AUTHOR_A,
+        replies: [
+          reply({
+            uri: "at://did:plc:bbb/app.bsky.feed.post/b",
+            author: AUTHOR_B,
+            replies: [
+              reply({ uri: "at://did:plc:ccc/app.bsky.feed.post/c", author: AUTHOR_C }),
+            ],
+          }),
+        ],
+      }),
+    ]);
+
+    const nodes = flattenThread(thread, { maxDepth: 2 });
+
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1].uri).toBe("at://did:plc:bbb/app.bsky.feed.post/b");
+    expect(nodes[1].hasMore).toBe(true);
+  });
+
   it("carries a labeled reply's moderation/self labels as string[]", () => {
     const thread = threadWithReplies([
       reply({
