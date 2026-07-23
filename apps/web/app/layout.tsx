@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import { eq } from "drizzle-orm";
-import { photographers } from "@luminance/db";
+import { photographers, unreadCount } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { Bell } from "@/components/bell";
 import { signOut } from "./actions";
 import "./globals.css";
 
@@ -46,6 +47,9 @@ export default async function RootLayout({
 }>) {
   const session = await getSession();
   const photographer = await isPhotographer(session.did);
+  // Notifications only exist for photographer recipients, so skip the query
+  // entirely for viewer/anon sessions rather than always fetching a zero.
+  const unread = photographer && session.did ? await unreadCount(getDb(), session.did) : 0;
 
   return (
     <html
@@ -71,9 +75,12 @@ export default async function RootLayout({
                 <>
                   <span className="text-zinc-300">{session.handle ?? session.did}</span>
                   {photographer ? (
-                    <Link href="/settings" className="transition-colors hover:text-zinc-100">
-                      Settings
-                    </Link>
+                    <>
+                      <Bell unreadCount={unread} />
+                      <Link href="/settings" className="transition-colors hover:text-zinc-100">
+                        Settings
+                      </Link>
+                    </>
                   ) : null}
                   <form action={signOut}>
                     <button
