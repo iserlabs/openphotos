@@ -1,0 +1,78 @@
+{
+  "followers": [
+    {
+      "did": "did:plc:gm5w2ga7lcqakdgrdktovzqy",
+      "handle": "lagomuller.bsky.social",
+      "displayName": "Humberto Do Lago Müller",
+      "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:gm5w2ga7lcqakdgrdktovzqy/bafkreihhwen2eepah3eua3reom3bfuhxph7yiq774z2zmudp2ctocnat5m",
+      "associated": {
+        "chat": {
+          "allowIncoming": "following"
+        },
+        "activitySubscription": {
+          "allowSubscriptions": "followers"
+        }
+      },
+      "labels": [],
+      "createdAt": "2024-09-12T02:25:17.116Z",
+      "description": "Photographer, artist, journalist. All pics and drawings are mine :)\n\nFotógrafo, desenhista, jornalista da Agência Mural cobrindo Mairiporã e região.\nAUDHD 🏳️‍🌈🇧🇷",
+      "indexedAt": "2025-11-16T04:27:28.450Z"
+    },
+    {
+      "did": "did:plc:xs2kkqkw2idh7ikzacgo743p",
+      "handle": "dhiislander.bsky.social",
+      "displayName": "Islander",
+      "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:xs2kkqkw2idh7ikzacgo743p/bafkreigmvqqzak2kvp27aqkrzx6inryhuus5wdr2epbteqccijzceueny4",
+      "associated": {
+        "chat": {
+          "allowIncoming": "following"
+        },
+        "activitySubscription": {
+          "allowSubscriptions": "followers"
+        }
+      },
+      "labels": [
+        {
+          "src": "did:plc:xs2kkqkw2idh7ikzacgo743p",
+          "uri": "at://did:plc:xs2kkqkw2idh7ikzacgo743p/app.bsky.actor.profile/self",
+          "cid": "bafyreibg7d46d7azif63hrxtrqtgf4wzyv4edtg7r745ocv3enivagrxiy",
+          "val": "!no-unauthenticated",
+          "cts": "1970-01-01T00:00:00.000Z"
+        }
+      ],
+      "createdAt": "2023-11-09T05:07:28.682Z",
+      "description": "Photography\n\nAll photos and Videos have been taken by and are owned by me(@dhiislander). \n\nCopyright ©️ 2019 - 2026 @dhiislander All Rights Reserved.",
+      "indexedAt": "2026-05-17T08:05:34.257Z"
+    },
+    {
+      "did": "did:plc:ogcpassshajbu2xlbqcwng4o",
+      "handle": "mimi105mm.bsky.social",
+      "displayName": "Mimi",
+      "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:ogcpassshajbu2xlbqcwng4o/bafkreia3dm3qh33txltcaekuaf54nvn7ysgibxhjhljpu5gvz2tig5sz7m",
+      "associated": {
+        "activitySubscription": {
+          "allowSubscriptions": "followers"
+        }
+      },
+      "labels": [],
+      "createdAt": "2024-11-18T00:45:53.301Z",
+      "description": "Nikon Z camera mostly doing macro nature with 105mm macro lens \nMy print shop— Mimi’s Wabi-Sabi Zone http://mimis-wabi-sabi-zone.framer.art",
+      "indexedAt": "2025-07-17T16:07:35.933Z"
+    }
+  ],
+  "subject": {
+    "did": "did:plc:ka5oytd2d6rhs2r6yrvt6yb2",
+    "handle": "kevinleephotos.bsky.social",
+    "displayName": "Kevin K. Lee",
+    "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreibezjxmjkcgahtenp7he7oprbxy67mfq5cpofgfhqfjy6rrgkodri",
+    "associated": {
+      "activitySubscription": {
+        "allowSubscriptions": "followers"
+      }
+    },
+    "labels": [],
+    "createdAt": "2025-09-04T17:31:42.398Z",
+    "description": "I have no idea what I'm doing. In NYC.",
+    "indexedAt": "2026-07-20T17:05:27.564Z"
+  }
+}
