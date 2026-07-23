@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
+import { eq } from "drizzle-orm";
+import { photographers } from "@luminance/db";
+import { getDb } from "@/lib/db";
+import { getSession } from "@/lib/session";
+import { signOut } from "./actions";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,11 +23,30 @@ export const metadata: Metadata = {
   description: "An open, ATProto-native hub for photography.",
 };
 
-export default function RootLayout({
+/**
+ * A photographer session is any session whose DID has a row in
+ * `photographers` (i.e. completed registration) — as opposed to a viewer
+ * session, which only carries a signed-in DID. One lookup per request,
+ * skipped entirely when signed out.
+ */
+async function isPhotographer(did: string | undefined): Promise<boolean> {
+  if (!did) return false;
+  const db = getDb();
+  const [row] = await db
+    .select({ did: photographers.did })
+    .from(photographers)
+    .where(eq(photographers.did, did));
+  return row != null;
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getSession();
+  const photographer = await isPhotographer(session.did);
+
   return (
     <html
       lang="en"
@@ -34,16 +58,37 @@ export default function RootLayout({
             <Link href="/" className="text-lg font-semibold tracking-tight text-zinc-100">
               Luminance
             </Link>
-            <nav className="flex gap-6 text-sm text-zinc-400">
+            <nav className="flex items-center gap-6 text-sm text-zinc-400">
               <Link href="/about" className="transition-colors hover:text-zinc-100">
                 About
               </Link>
-              <Link href="/register" className="transition-colors hover:text-zinc-100">
-                Register
-              </Link>
-              <Link href="/settings" className="transition-colors hover:text-zinc-100">
-                Settings
-              </Link>
+              {!photographer ? (
+                <Link href="/register" className="transition-colors hover:text-zinc-100">
+                  Register
+                </Link>
+              ) : null}
+              {session.did ? (
+                <>
+                  <span className="text-zinc-300">{session.handle ?? session.did}</span>
+                  {photographer ? (
+                    <Link href="/settings" className="transition-colors hover:text-zinc-100">
+                      Settings
+                    </Link>
+                  ) : null}
+                  <form action={signOut}>
+                    <button
+                      type="submit"
+                      className="transition-colors hover:text-zinc-100"
+                    >
+                      Sign out
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <Link href="/login" className="transition-colors hover:text-zinc-100">
+                  Sign in
+                </Link>
+              )}
             </nav>
           </div>
         </header>

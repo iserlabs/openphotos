@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { oauthStates, oauthSessions, type Db } from "@luminance/db";
 import { resolvePdsEndpoint, safeJsonFetch } from "@luminance/atproto";
 import { env } from "./env";
+import { encodeAppState, type AppState } from "./oauth-state";
 
 /**
  * Build the client metadata document. Derived entirely from `env.PUBLIC_URL` so
@@ -72,6 +73,30 @@ export async function getOAuthClient(db: Db): Promise<NodeOAuthClient> {
       },
     },
   });
+}
+
+/**
+ * Start the OAuth authorize redirect for `handle`, carrying `appState` (mode +
+ * optional returnTo) through the round-trip.
+ *
+ * VERIFY-API (Task 4): the installed `@atproto/oauth-client-node@0.4.9`
+ * (via `@atproto/oauth-client@0.7.11`) natively supports an app-defined
+ * `state` string on `authorize(handle, { state })` — see
+ * `node_modules/.pnpm/@atproto+oauth-client@0.7.11/node_modules/@atproto/oauth-client/dist/oauth-client.js`:
+ * `authorize()` stores our `state` value as `appState` inside the *same*
+ * nonce-keyed record it already writes to `stateStore` (backed by the
+ * existing `oauthStates` Drizzle/JSONB table below) alongside the PKCE
+ * verifier and DPoP key, and `callback()` returns it verbatim as
+ * `{ session, state }`. So the encoded `AppState` never leaves our own
+ * server and needs no new table, column, or cookie — it rides inside the
+ * OAuth library's own state-store row for the lifetime of the flow.
+ */
+export async function authorizeWithState(
+  client: NodeOAuthClient,
+  handle: string,
+  appState: AppState,
+): Promise<URL> {
+  return client.authorize(handle, { state: encodeAppState(appState) });
 }
 
 /** Public client-metadata document, for the `/oauth/client-metadata.json` route. */
