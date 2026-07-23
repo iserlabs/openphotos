@@ -412,6 +412,57 @@ export async function followPhotographer(
   await assertRateLimit(db, actorDid);
 
   const agent = await agentFactory(actorDid);
+
+  // Push the follow notification per the normal gating (registered photographer,
+  // not a self-follow). Shared by the adopt and create paths below so both stay
+  // identical. linkUri is built from the DB row's handle, never client input.
+  const pushFollowNotification = async () => {
+    if (target.photographerDid === actorDid) return;
+    const photographer = await getActivePhotographer(db, target.photographerDid);
+    if (photographer) {
+      await pushNotification(db, {
+        recipientDid: photographer.did,
+        actorDid,
+        actorHandle,
+        kind: "follow",
+        subjectUri: target.photographerDid,
+        linkUri: `/${photographer.handle}`,
+        snippet: null,
+      });
+    }
+  };
+
+  // Dup-guard + record adoption: if the viewer already follows this actor,
+  // getProfile returns their EXISTING follow record's at-uri in
+  // `viewer.following`. Adopt it — write `interactions` keyed on that uri — and
+  // return WITHOUT creating a second follow record. This kills duplicate PDS
+  // records AND heals the button seam: findInteraction becomes truthy (the
+  // FollowButton reads as "following") and unfollow resolves its rkey from the
+  // adopted uri. Wrapped in try/catch: a getProfile failure prefers
+  // availability over de-dup and falls through to the normal create path.
+  let existingFollowUri: string | undefined;
+  try {
+    const { data } = await agent.app.bsky.actor.getProfile({ actor: target.photographerDid });
+    existingFollowUri = data.viewer?.following;
+  } catch {
+    existingFollowUri = undefined;
+  }
+
+  if (existingFollowUri) {
+    try {
+      await recordInteraction(db, {
+        recordUri: existingFollowUri,
+        actorDid,
+        kind: "follow",
+        subjectUri: target.photographerDid,
+      });
+      await pushFollowNotification();
+    } catch {
+      return { ok: false, error: "followed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+    }
+    return { ok: true };
+  }
+
   let created: { uri: string; cid: string };
   try {
     const res = await agent.com.atproto.repo.createRecord({
@@ -431,20 +482,7 @@ export async function followPhotographer(
       kind: "follow",
       subjectUri: target.photographerDid,
     });
-    if (target.photographerDid !== actorDid) {
-      const photographer = await getActivePhotographer(db, target.photographerDid);
-      if (photographer) {
-        await pushNotification(db, {
-          recipientDid: photographer.did,
-          actorDid,
-          actorHandle,
-          kind: "follow",
-          subjectUri: target.photographerDid,
-          linkUri: `/${photographer.handle}`,
-          snippet: null,
-        });
-      }
-    }
+    await pushFollowNotification();
   } catch {
     return { ok: false, error: "followed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
   }

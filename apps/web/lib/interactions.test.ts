@@ -37,6 +37,7 @@ function makeFakeAgent(opts: {
   createRecord?: (input: unknown) => Promise<{ data: { uri: string; cid: string } }>;
   deleteRecord?: (input: unknown) => Promise<{ data: Record<string, never> }>;
   listRecords?: (input: unknown) => Promise<{ data: { cursor?: string; records: { uri: string; cid: string; value: unknown }[] } }>;
+  getProfile?: (input: unknown) => Promise<{ data: { viewer?: { following?: string } } }>;
 } = {}) {
   const createRecord = vi.fn(
     opts.createRecord ??
@@ -44,10 +45,14 @@ function makeFakeAgent(opts: {
   );
   const deleteRecord = vi.fn(opts.deleteRecord ?? (async () => ({ data: {} })));
   const listRecords = vi.fn(opts.listRecords ?? (async () => ({ data: { records: [] } })));
+  // Default: viewer is NOT already following (no adoption) — the follow-create
+  // path runs. Tests that exercise dup-guard/adoption override getProfile.
+  const getProfile = vi.fn(opts.getProfile ?? (async () => ({ data: { viewer: {} } })));
   const agent = {
     com: { atproto: { repo: { createRecord, deleteRecord, listRecords } } },
+    app: { bsky: { actor: { getProfile } } },
   };
-  return { agent: agent as unknown as Agent, createRecord, deleteRecord, listRecords };
+  return { agent: agent as unknown as Agent, createRecord, deleteRecord, listRecords, getProfile };
 }
 
 /**
@@ -595,6 +600,49 @@ describe("followPhotographer", () => {
 
     const [notif] = await db.select().from(notifications);
     expect(notif.linkUri).toBe("/dbhandle.test");
+  });
+
+  it("adopts the viewer's EXISTING follow record (viewer.following) instead of creating a duplicate", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const existingFollowUri = "at://did:plc:viewer/app.bsky.graph.follow/existing";
+    const { agent, createRecord, getProfile } = makeFakeAgent({
+      getProfile: async () => ({ data: { viewer: { following: existingFollowUri } } }),
+    });
+
+    const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(getProfile).toHaveBeenCalledWith({ actor: PHOTOGRAPHER });
+    expect(createRecord).not.toHaveBeenCalled(); // no duplicate follow record
+    const [row] = await db.select().from(interactions);
+    expect(row).toMatchObject({ recordUri: existingFollowUri, actorDid: VIEWER, kind: "follow", subjectUri: PHOTOGRAPHER });
+    // notification still fires per normal gating
+    const [notif] = await db.select().from(notifications);
+    expect(notif).toMatchObject({ recipientDid: PHOTOGRAPHER, kind: "follow", linkUri: "/photog.test" });
+  });
+
+  it("falls back to createRecord when getProfile throws (availability over de-dup)", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const followUri = "at://did:plc:viewer/app.bsky.graph.follow/created";
+    const { agent, createRecord } = makeFakeAgent({
+      getProfile: async () => {
+        throw new Error("getProfile network failure");
+      },
+      createRecord: async () => ({ data: { uri: followUri, cid: "bafyc" } }),
+    });
+
+    const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(createRecord).toHaveBeenCalledTimes(1); // create path ran
+    const [row] = await db.select().from(interactions);
+    expect(row).toMatchObject({ recordUri: followUri, actorDid: VIEWER, kind: "follow", subjectUri: PHOTOGRAPHER });
   });
 
   it("re-following after an unfollow does not duplicate the notification row (dedupe key covers it)", async () => {
