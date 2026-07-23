@@ -1,5 +1,5 @@
-import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
-import { photographers, photos, engagement, interactions, pushNotification, type Db } from "@luminance/db";
+import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { photographers, photos, engagement, interactions, pushNotification, ABSORPTION_GRACE_MS, type Db } from "@luminance/db";
 import type { PostView, ThreadView, LikeView, ActorView } from "@luminance/atproto";
 import { Sentry, sentryEnabled } from "./sentry.js";
 
@@ -100,14 +100,20 @@ async function notifyReplies(db: Db, nodes: ThreadView[], photographerDid: strin
 }
 
 /** Deletes soft-deleted `interactions` whose subject's engagement has already
- * absorbed the delete (fetchedAt > deletedAt). A subject with no engagement
- * row is left alone — the inner join naturally excludes it (spec: "leave
- * those"). */
+ * absorbed the delete BEYOND the grace window (deletedAt < fetchedAt − GRACE).
+ * Aligned with `engagementFor`'s never-regress boundary: a soft-deleted row
+ * still inside the grace window is treated as unabsorbed there (its -1 still
+ * applies), so we must NOT prune it yet or the delta and the prune would
+ * disagree. A subject with no engagement row is left alone — the inner join
+ * naturally excludes it (spec: "leave those"). */
 async function pruneAbsorbedInteractions(db: Db): Promise<void> {
   const toPrune = await db.select({ recordUri: interactions.recordUri })
     .from(interactions)
     .innerJoin(engagement, eq(interactions.subjectUri, engagement.postUri))
-    .where(and(isNotNull(interactions.deletedAt), lt(interactions.deletedAt, engagement.fetchedAt)));
+    .where(and(
+      isNotNull(interactions.deletedAt),
+      lt(interactions.deletedAt, sql`${engagement.fetchedAt} - ${sql.raw(String(ABSORPTION_GRACE_MS))} * interval '1 millisecond'`),
+    ));
   if (toPrune.length) {
     await db.delete(interactions).where(inArray(interactions.recordUri, toPrune.map((r) => r.recordUri)));
   }

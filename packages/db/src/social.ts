@@ -21,13 +21,26 @@ export async function interactionWritesInWindow(db: Db, actorDid: string, window
   return r?.n ?? 0;
 }
 
+/**
+ * Never-regress grace window. The absorption boundary is `fetchedAt - GRACE`,
+ * not `fetchedAt` itself: the AppView indexes a like/comment/unlike ~1min after
+ * it happens, so a sweep that fetches BEFORE that absorption still carries a
+ * stale cached count. Counting a local delta as "absorbed" the instant its
+ * timestamp predates `fetchedAt` would then DROP the viewer's own just-written
+ * interaction (a visible regression). By treating anything within GRACE of the
+ * fetch as still-unabsorbed, we keep the local delta applied — the spec
+ * prioritizes never-regress over a brief (≤GRACE) double-count on the rare
+ * sweep that WAS already fast enough to absorb it.
+ */
+export const ABSORPTION_GRACE_MS = 90_000;
+
 export async function engagementFor(db: Db, postUris: string[]): Promise<Map<string, { likeCount: number; replyCount: number }>> {
   const out = new Map(postUris.map((u) => [u, { likeCount: 0, replyCount: 0 }]));
   if (!postUris.length) return out;
   const base = await db.select().from(engagement).where(inArray(engagement.postUri, postUris));
   const fetchedAt = new Map(base.map((b) => [b.postUri, b.fetchedAt]));
   for (const b of base) out.set(b.postUri, { likeCount: b.likeCount, replyCount: b.replyCount });
-  // one grouped delta query (spec §3): creates/deletes newer than the row's fetchedAt
+  // one grouped delta query (spec §3): creates/deletes not yet absorbed
   const deltas = await db.select({
     subjectUri: interactions.subjectUri, kind: interactions.kind,
     createdAt: interactions.createdAt, deletedAt: interactions.deletedAt,
@@ -35,21 +48,22 @@ export async function engagementFor(db: Db, postUris: string[]): Promise<Map<str
   for (const d of deltas) {
     const cur = out.get(d.subjectUri)!;
     const fa = fetchedAt.get(d.subjectUri) ?? new Date(0);
+    // Absorption boundary sits GRACE before the fetch (see ABSORPTION_GRACE_MS).
+    const boundary = new Date(fa.getTime() - ABSORPTION_GRACE_MS);
     const field = d.kind === "like" ? "likeCount" : "replyCount";
-    // Spec §3 formula: displayed = cached count + (local creates newer than fetchedAt)
-    // - (local deletes not yet absorbed). These two terms are independent,
-    // not mutually exclusive branches — a row that was both created AND deleted
-    // after fetchedAt must apply both (net zero), and a row created before but
-    // deleted after fetchedAt must apply only the delete (net -1).
-    //
-    // The delete term is gated on `d.deletedAt > fa`, NOT `d.deletedAt` alone:
-    // a soft-deleted row still present at query time is only an unabsorbed
-    // unlike if the sweep that produced `fa` ran BEFORE the delete happened.
-    // If the sweep already ran after the delete (fa >= deletedAt), the cached
-    // count already reflects the unlike, and subtracting again would
-    // double-count it (case 4: c<=fa && d<=fa -> 0).
-    if (d.createdAt > fa) cur[field] += 1;
-    if (d.deletedAt && d.deletedAt > fa) cur[field] -= 1;
+    // Two independent terms (spec §3): +1 for an unabsorbed create, -1 for an
+    // unabsorbed delete. They are NOT exclusive branches — a row created AND
+    // deleted after the boundary applies both (both-pending nets 0); a row
+    // created before but deleted after applies only the delete (net -1); a row
+    // with both timestamps older than the boundary is fully absorbed (0).
+    if (d.createdAt > boundary) cur[field] += 1;
+    if (d.deletedAt && d.deletedAt > boundary) cur[field] -= 1;
+  }
+  // Clamp: a still-pending unlike against an already-0 cached count would
+  // otherwise render -1. Displayed counts are never negative.
+  for (const counts of out.values()) {
+    counts.likeCount = Math.max(0, counts.likeCount);
+    counts.replyCount = Math.max(0, counts.replyCount);
   }
   return out;
 }

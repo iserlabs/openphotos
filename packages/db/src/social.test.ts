@@ -14,25 +14,49 @@ describe("count formula (spec §3 races)", () => {
     await recordInteraction(db, like(1)); // created now > fetchedAt
     expect((await engagementFor(db, [POST])).get(POST)).toEqual({ likeCount: 6, replyCount: 0 });
   });
+  // "Absorbed" now means BEYOND the 90s grace window: these fixtures are
+  // anchored to minutes (createdAt ~now-10min, fetchedAt ~now-5min) so the
+  // like/unlike sit safely older than `fetchedAt - ABSORPTION_GRACE_MS` — a
+  // sub-grace offset (−5s/−10s) would count as unabsorbed under never-regress.
   it("does NOT double-count a like the sweep already absorbed", async () => {
     const db = await createTestDb();
-    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10_000) });
-    await db.insert(engagement).values({ postUri: POST, likeCount: 6, fetchedAt: new Date(Date.now() - 5_000) }); // sweep after the like
+    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10 * 60_000) });
+    await db.insert(engagement).values({ postUri: POST, likeCount: 6, fetchedAt: new Date(Date.now() - 5 * 60_000) }); // sweep well after the like
     expect((await engagementFor(db, [POST])).get(POST)!.likeCount).toBe(6);
   });
   it("subtracts an unlike of an absorbed like", async () => {
     const db = await createTestDb();
-    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10_000) });
-    await db.insert(engagement).values({ postUri: POST, likeCount: 6, fetchedAt: new Date(Date.now() - 5_000) });
-    await softDeleteInteraction(db, like(1).recordUri); // deletedAt (real now) > fetchedAt
+    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10 * 60_000) });
+    await db.insert(engagement).values({ postUri: POST, likeCount: 6, fetchedAt: new Date(Date.now() - 5 * 60_000) });
+    await softDeleteInteraction(db, like(1).recordUri); // deletedAt (real now) > fetchedAt - grace
     expect((await engagementFor(db, [POST])).get(POST)!.likeCount).toBe(5);
   });
-  it("does not subtract an unlike the sweep already absorbed (c<f, d<f)", async () => {
+  it("does not subtract an unlike the sweep already absorbed (c<f, d<f, both beyond grace)", async () => {
     const db = await createTestDb();
-    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10_000) });
-    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 8_000) }).where(eq(interactions.recordUri, like(1).recordUri));
-    await db.insert(engagement).values({ postUri: POST, likeCount: 5, fetchedAt: new Date(Date.now() - 5_000) });
+    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10 * 60_000) });
+    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 8 * 60_000) }).where(eq(interactions.recordUri, like(1).recordUri));
+    await db.insert(engagement).values({ postUri: POST, likeCount: 5, fetchedAt: new Date(Date.now() - 5 * 60_000) });
     expect((await engagementFor(db, [POST])).get(POST)!.likeCount).toBe(5);
+  });
+  it("never-regress: a like within grace of an absorbing sweep keeps its +1 (may briefly double, must not drop)", async () => {
+    // The viewer liked ~30s ago; a sweep then fetched counts whose fetchedAt is
+    // ~10s ago (20s after the like — INSIDE the 90s grace) but had NOT yet
+    // absorbed the like (cached likeCount still 5). Pre-sweep, the display was
+    // 5 + this pending like = 6. The sweep must NOT drop it back to 5.
+    const db = await createTestDb();
+    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 30_000) });
+    await db.insert(engagement).values({ postUri: POST, likeCount: 5, fetchedAt: new Date(Date.now() - 10_000) });
+    expect((await engagementFor(db, [POST])).get(POST)!.likeCount).toBe(6); // not 5 — never regress
+  });
+  it("clamps at 0: cached 0 + a still-pending unlike must not go negative", async () => {
+    // The like itself is long absorbed (createdAt beyond grace), cached count is
+    // 0, but the unlike is recent (deletedAt within grace -> unabsorbed -1).
+    // 0 - 1 would be -1; the final count clamps to 0.
+    const db = await createTestDb();
+    await db.insert(interactions).values({ ...like(1), createdAt: new Date(Date.now() - 10 * 60_000) });
+    await db.update(interactions).set({ deletedAt: new Date() }).where(eq(interactions.recordUri, like(1).recordUri));
+    await db.insert(engagement).values({ postUri: POST, likeCount: 0, fetchedAt: new Date(Date.now() - 5_000) });
+    expect((await engagementFor(db, [POST])).get(POST)!.likeCount).toBe(0);
   });
   it("like+unlike both pending nets to zero delta", async () => {
     const db = await createTestDb();

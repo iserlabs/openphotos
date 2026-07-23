@@ -356,21 +356,30 @@ describe("prune", () => {
     const db = await createTestDb();
     await seedPhotographer(db, KEVIN, "kevin.photos");
     const uriAbsorbed = "at://did:plc:kevin/app.bsky.feed.post/pabsorbed";
+    const uriGrace = "at://did:plc:kevin/app.bsky.feed.post/pgrace";
     const uriPending = "at://did:plc:kevin/app.bsky.feed.post/ppending";
     const uriNoEngagement = "at://did:plc:kevin/app.bsky.feed.post/pnone";
 
     await db.insert(engagement).values({ postUri: uriAbsorbed, fetchedAt: new Date() });
+    await db.insert(engagement).values({ postUri: uriGrace, fetchedAt: new Date() });
     await db.insert(engagement).values({ postUri: uriPending, fetchedAt: new Date(Date.now() - 60_000) });
     // uriNoEngagement intentionally has no engagement row
 
+    // Absorbed BEYOND grace: deletedAt (now-5min) < fetchedAt(now) - 90s -> pruned.
     await recordInteraction(db, { recordUri: "at://did:plc:v/app.bsky.feed.like/absorbed", actorDid: "did:plc:v", kind: "like", subjectUri: uriAbsorbed });
-    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 120_000) }).where(eq(interactions.recordUri, "at://did:plc:v/app.bsky.feed.like/absorbed"));
+    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 5 * 60_000) }).where(eq(interactions.recordUri, "at://did:plc:v/app.bsky.feed.like/absorbed"));
+
+    // Within grace: deletedAt (now-30s) is < fetchedAt(now) but NOT < fetchedAt - 90s.
+    // Under the old bare `deletedAt < fetchedAt` rule this would have been pruned;
+    // the grace boundary keeps it (its -1 still applies in engagementFor).
+    await recordInteraction(db, { recordUri: "at://did:plc:v/app.bsky.feed.like/grace", actorDid: "did:plc:v", kind: "like", subjectUri: uriGrace });
+    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 30_000) }).where(eq(interactions.recordUri, "at://did:plc:v/app.bsky.feed.like/grace"));
 
     await recordInteraction(db, { recordUri: "at://did:plc:v/app.bsky.feed.like/pending", actorDid: "did:plc:v", kind: "like", subjectUri: uriPending });
     await db.update(interactions).set({ deletedAt: new Date() }).where(eq(interactions.recordUri, "at://did:plc:v/app.bsky.feed.like/pending"));
 
     await recordInteraction(db, { recordUri: "at://did:plc:v/app.bsky.feed.like/nosubject", actorDid: "did:plc:v", kind: "like", subjectUri: uriNoEngagement });
-    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 120_000) }).where(eq(interactions.recordUri, "at://did:plc:v/app.bsky.feed.like/nosubject"));
+    await db.update(interactions).set({ deletedAt: new Date(Date.now() - 5 * 60_000) }).where(eq(interactions.recordUri, "at://did:plc:v/app.bsky.feed.like/nosubject"));
 
     const { appview } = makeStubAppView();
     await runEngagementSweep(db, appview);
@@ -378,6 +387,7 @@ describe("prune", () => {
     const remaining = await db.select({ recordUri: interactions.recordUri }).from(interactions);
     const remainingUris = remaining.map((r) => r.recordUri).sort();
     expect(remainingUris).toEqual([
+      "at://did:plc:v/app.bsky.feed.like/grace",     // within grace -> not yet absorbed, kept
       "at://did:plc:v/app.bsky.feed.like/nosubject", // no engagement row -> left alone
       "at://did:plc:v/app.bsky.feed.like/pending",   // deletedAt > fetchedAt -> not yet absorbed
     ].sort());
