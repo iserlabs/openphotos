@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { feedPage } from "@luminance/db";
+import { feedPage, engagementFor } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { PhotoGrid } from "@/components/photo-grid";
 
@@ -14,7 +14,8 @@ export default async function Home({
   searchParams: Promise<{ cursor?: string }>;
 }) {
   const { cursor } = await searchParams;
-  const { items, cursor: nextCursor } = await feedPage(getDb(), {
+  const db = getDb();
+  const { items, cursor: nextCursor } = await feedPage(db, {
     limit: PAGE_SIZE,
     cursor: cursor || undefined,
   });
@@ -33,9 +34,16 @@ export default async function Home({
     );
   }
 
+  // ONE grouped engagementFor call per page render (spec §3 constraint —
+  // never per-tile). Only bsky-source posts have real engagement (the
+  // interaction router only ever mints subjects for `source === "bsky"`);
+  // dedupe atUris since a multi-image post repeats its atUri across rows.
+  const bskyUris = [...new Set(items.filter((p) => p.source === "bsky").map((p) => p.atUri))];
+  const counts = await engagementFor(db, bskyUris);
+
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
-      <PhotoGrid items={items} />
+      <PhotoGrid items={items} counts={counts} />
       {nextCursor ? (
         <div className="mt-8 flex justify-center pb-4">
           <Link

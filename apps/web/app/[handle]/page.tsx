@@ -1,18 +1,48 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { unstable_cache } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
-import { feedPage, photos, photoOverrides, series as seriesTable } from "@luminance/db";
+import { feedPage, engagementFor, findInteraction, photos, photoOverrides, series as seriesTable } from "@luminance/db";
+import { AppView } from "@luminance/atproto";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
+import { getSession } from "@/lib/session";
 import { getPhotographerByHandle, splitAtUri } from "@/lib/queries";
 import { safeExternalHref } from "@/lib/safe-href";
 import { PhotoGrid } from "@/components/photo-grid";
+import { FollowButton } from "@/components/follow-button";
 
 // Live DB per request — profiles reflect current index/moderation state.
 export const dynamic = "force-dynamic";
 
 const PHOTO_PAGE_SIZE = 60;
+
+const appView = new AppView();
+
+/**
+ * `AppView.getProfile` goes through `safeJsonFetch` (undici's `fetch`
+ * directly, not Next's patched global `fetch`), so Next's `{ next:
+ * { revalidate } }` fetch-cache option never applies to it. `unstable_cache`
+ * is the documented fallback for caching non-`fetch` async functions in this
+ * (pre-Cache-Components — `cacheComponents` isn't enabled in next.config.ts)
+ * model: a 5-minute revalidate window, matching the spec's follower-count
+ * freshness target without a network round-trip on every profile render.
+ */
+const getCachedFollowerCount = unstable_cache(
+  async (did: string) => (await appView.getProfile(did)).followersCount,
+  ["profile-follower-count"],
+  { revalidate: 300 },
+);
+
+/** Wrapped separately from the cache so a thrown/rejected AppView call never gets cached as a failure — only render nothing this request. */
+async function getFollowerCount(did: string): Promise<number | null> {
+  try {
+    return await getCachedFollowerCount(did);
+  } catch {
+    return null;
+  }
+}
 
 export async function generateMetadata({
   params,
@@ -50,8 +80,10 @@ export default async function ProfilePage({
   if (!photographer) notFound();
 
   const websiteHref = safeExternalHref(photographer.website);
+  const session = await getSession();
+  const isOwnProfile = session.did === photographer.did;
 
-  const [{ items }, seriesRows] = await Promise.all([
+  const [{ items }, seriesRows, followerCount, viewerFollow] = await Promise.all([
     feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did }),
     db
       .select({
@@ -66,7 +98,18 @@ export default async function ProfilePage({
       .leftJoin(photos, and(eq(photos.atUri, seriesTable.coverPhotoUri), eq(photos.mediaIndex, 0)))
       .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
       .where(eq(seriesTable.did, photographer.did)),
+    getFollowerCount(photographer.did),
+    // Write-through truth (spec-honest seam, see FollowButton doc comment):
+    // reflects follows made through Luminance, not necessarily the live
+    // Bluesky graph. Skipped entirely when signed out — nothing to look up.
+    session.did && !isOwnProfile ? findInteraction(db, session.did, "follow", photographer.did) : Promise.resolve(null),
   ]);
+
+  // ONE grouped engagementFor call per page render (spec §3 constraint —
+  // never per-tile). Only bsky-source posts have real engagement; dedupe
+  // atUris since a multi-image post repeats its atUri across mediaIndex rows.
+  const bskyUris = [...new Set(items.filter((p) => p.source === "bsky").map((p) => p.atUri))];
+  const counts = await engagementFor(db, bskyUris);
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -84,11 +127,17 @@ export default async function ProfilePage({
         ) : (
           <div className="h-24 w-24 flex-none rounded-full bg-zinc-800" />
         )}
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
             {photographer.displayName ?? photographer.handle}
           </h1>
           <p className="text-sm text-zinc-500">@{photographer.handle}</p>
+          {/* Follower count comes from the Bluesky AppView (5-min cache) — rendered only when the fetch succeeds (spec: fail silent, no stale/zero placeholder). */}
+          {followerCount !== null ? (
+            <p className="mt-1 text-sm text-zinc-500">
+              {followerCount} follower{followerCount === 1 ? "" : "s"}
+            </p>
+          ) : null}
           {photographer.bio ? (
             <p className="mt-3 max-w-xl text-sm text-zinc-300">{photographer.bio}</p>
           ) : null}
@@ -103,6 +152,16 @@ export default async function ProfilePage({
             </a>
           ) : null}
         </div>
+        {!isOwnProfile ? (
+          <div className="flex-none">
+            <FollowButton
+              photographerDid={photographer.did}
+              photographerHandle={photographer.handle}
+              signedIn={Boolean(session.did)}
+              initialFollowing={Boolean(viewerFollow)}
+            />
+          </div>
+        ) : null}
       </header>
 
       {seriesRows.length > 0 ? (
@@ -143,7 +202,7 @@ export default async function ProfilePage({
         {items.length === 0 ? (
           <p className="py-16 text-center text-sm text-zinc-500">No photos indexed yet.</p>
         ) : (
-          <PhotoGrid items={items} />
+          <PhotoGrid items={items} counts={counts} />
         )}
       </section>
     </div>
