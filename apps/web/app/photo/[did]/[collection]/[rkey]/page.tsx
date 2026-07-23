@@ -10,7 +10,7 @@ import { getSession } from "@/lib/session";
 import { routeInteraction } from "@/lib/interactions";
 import { getPhotoRecord, isSensitive, buildAtUri } from "@/lib/queries";
 import { safeExternalHref } from "@/lib/safe-href";
-import { flattenThread } from "@/lib/thread";
+import { flattenThread, pendingOwnComments } from "@/lib/thread";
 import { SensitiveImage } from "@/components/photo-card";
 import { LikeButton } from "@/components/like-button";
 import { CommentThread } from "@/components/comment-thread";
@@ -52,11 +52,15 @@ function decodeParam(s: string): string {
  * and this is the simplest mechanism that coexists with force-dynamic; a
  * plain uncached call remains the documented fallback if this ever proves to
  * fight the route's dynamic rendering in practice.
+ *
+ * The static `"photo-threads"` tag lets the comment/delete server actions
+ * `revalidateTag` this cache after a write, so a just-posted (or just-deleted)
+ * comment shows on the next render instead of waiting out the 60s TTL.
  */
 const getCachedThread = unstable_cache(
   async (atUri: string): Promise<ThreadView> => new AppView().getPostThread(atUri, 10),
   ["photo-thread"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["photo-threads"] },
 );
 
 async function load(db: Db, { did, collection, rkey }: Params) {
@@ -127,6 +131,14 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
     try {
       const thread = await getCachedThread(atUri);
       commentNodes = flattenThread(thread, { maxDepth: 2 });
+      // Merge the viewer's own comments the cached AppView thread hasn't indexed
+      // yet (write-through row exists, AppView lag ~1min) so the author always
+      // sees their just-posted comment immediately.
+      if (session.did) {
+        const existing = new Set(commentNodes.map((n) => n.uri));
+        const pending = await pendingOwnComments(db, session.did, session.handle ?? session.did, atUri, existing);
+        commentNodes = [...commentNodes, ...pending];
+      }
     } catch {
       threadUnavailable = true;
     }

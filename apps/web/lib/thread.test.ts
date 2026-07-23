@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ThreadView } from "@luminance/atproto";
-import { flattenThread } from "./thread";
+import { createTestDb, recordInteraction, softDeleteInteraction } from "@luminance/db";
+import { flattenThread, pendingOwnComments } from "./thread";
 // Real, captured-from-AppView fixture (Task 3) — a post with zero replies.
 // Reused here to confirm the (empty) real shape parses without special-casing.
 import getPostThreadFixture from "../../../packages/atproto/src/fixtures/appview/getPostThread.json" with { type: "json" };
@@ -217,5 +218,59 @@ describe("flattenThread", () => {
 
     const nodes = flattenThread(thread, { maxDepth: 2 });
     expect(nodes[0].labels).toEqual([]);
+  });
+});
+
+describe("pendingOwnComments", () => {
+  const ATURI = "at://did:plc:photog/app.bsky.feed.post/p1";
+  const SESSION_DID = "did:plc:me";
+  const HANDLE = "me.test";
+
+  it("includes the session user's own un-deleted comment that isn't already in the thread", async () => {
+    const db = await createTestDb();
+    const uri = "at://did:plc:me/app.bsky.feed.post/c1";
+    await recordInteraction(db, { recordUri: uri, actorDid: SESSION_DID, kind: "comment", subjectUri: ATURI, text: "pending!", recordCid: "bafyc1" });
+
+    const nodes = await pendingOwnComments(db, SESSION_DID, HANDLE, ATURI, new Set());
+
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      uri,
+      authorDid: SESSION_DID,
+      authorHandle: HANDLE,
+      text: "pending!",
+      depth: 0,
+      hasMore: false,
+      labels: [],
+    });
+    expect(nodes[0].authorAvatarUrl).toBeUndefined();
+  });
+
+  it("excludes a comment already present in the thread (uri in existingUris)", async () => {
+    const db = await createTestDb();
+    const uri = "at://did:plc:me/app.bsky.feed.post/c2";
+    await recordInteraction(db, { recordUri: uri, actorDid: SESSION_DID, kind: "comment", subjectUri: ATURI, text: "already shown" });
+
+    const nodes = await pendingOwnComments(db, SESSION_DID, HANDLE, ATURI, new Set([uri]));
+    expect(nodes).toHaveLength(0);
+  });
+
+  it("excludes a soft-deleted own comment", async () => {
+    const db = await createTestDb();
+    const uri = "at://did:plc:me/app.bsky.feed.post/c3";
+    await recordInteraction(db, { recordUri: uri, actorDid: SESSION_DID, kind: "comment", subjectUri: ATURI, text: "deleted" });
+    await softDeleteInteraction(db, uri);
+
+    const nodes = await pendingOwnComments(db, SESSION_DID, HANDLE, ATURI, new Set());
+    expect(nodes).toHaveLength(0);
+  });
+
+  it("excludes another actor's comment and non-comment kinds on the same subject", async () => {
+    const db = await createTestDb();
+    await recordInteraction(db, { recordUri: "at://did:plc:other/app.bsky.feed.post/x", actorDid: "did:plc:other", kind: "comment", subjectUri: ATURI, text: "not mine" });
+    await recordInteraction(db, { recordUri: "at://did:plc:me/app.bsky.feed.like/y", actorDid: SESSION_DID, kind: "like", subjectUri: ATURI });
+
+    const nodes = await pendingOwnComments(db, SESSION_DID, HANDLE, ATURI, new Set());
+    expect(nodes).toHaveLength(0);
   });
 });

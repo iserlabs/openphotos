@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidateTag } from "next/cache";
 import type { Db } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
@@ -152,7 +153,16 @@ export async function commentAction(formData: FormData): Promise<ActionResult> {
   try {
     const session = await getSession();
     const db = getDb();
-    return await commentActionCore(db, session, formData);
+    const result = await commentActionCore(db, session, formData);
+    // Blanket-invalidate the cached AppView threads so the new comment shows on
+    // the next render. Alpha-scale: one shared tag across ALL photo threads, so
+    // any comment busts every cached thread — acceptable churn at launch
+    // traffic; per-post tagging is a future refinement. Next 16 requires the
+    // cacheLife profile arg ("max" = stale-while-revalidate background refresh);
+    // the author's OWN immediate view is covered separately by
+    // pendingOwnComments on the page, so stale-while-revalidate is fine here.
+    if (result.ok) revalidateTag("photo-threads", "max");
+    return result;
   } catch (err) {
     return { ok: false, error: "something went wrong — please try again" };
   }
@@ -185,7 +195,11 @@ export async function deleteCommentAction(formData: FormData): Promise<ActionRes
   try {
     const session = await getSession();
     const db = getDb();
-    return await deleteCommentActionCore(db, session, formData);
+    const result = await deleteCommentActionCore(db, session, formData);
+    // Same blanket invalidation as commentAction — a deleted comment must stop
+    // showing on the next render (alpha-scale one-tag-for-all churn accepted).
+    if (result.ok) revalidateTag("photo-threads", "max");
+    return result;
   } catch (err) {
     return { ok: false, error: "something went wrong — please try again" };
   }

@@ -1,3 +1,5 @@
+import { and, eq, isNull } from "drizzle-orm";
+import { interactions, type Db } from "@luminance/db";
 import type { ThreadView } from "@luminance/atproto";
 
 /**
@@ -94,4 +96,50 @@ export function flattenThread(thread: ThreadView, opts: { maxDepth: number }): C
 
   walk(root?.replies, 0);
   return out;
+}
+
+/**
+ * The session user's own comments that the cached AppView thread doesn't show
+ * yet — a comment just posted (write-through row exists) but not yet indexed by
+ * the AppView (~1min lag) would otherwise vanish from the page until the next
+ * revalidation. Mirrors the never-regress intent for engagement counts, applied
+ * to comment visibility: the author always sees their own comment immediately.
+ *
+ * Queries the viewer's un-deleted `comment` interactions on this subject,
+ * excludes any `recordUri` already flattened out of the thread (`existingUris`),
+ * and maps the rest to depth-0 `CommentNode`s using the stored text and the
+ * session handle (no avatar — we don't snapshot the viewer's avatar).
+ */
+export async function pendingOwnComments(
+  db: Db,
+  sessionDid: string,
+  sessionHandle: string,
+  atUri: string,
+  existingUris: Set<string>,
+): Promise<CommentNode[]> {
+  const rows = await db
+    .select()
+    .from(interactions)
+    .where(
+      and(
+        eq(interactions.kind, "comment"),
+        eq(interactions.subjectUri, atUri),
+        eq(interactions.actorDid, sessionDid),
+        isNull(interactions.deletedAt),
+      ),
+    );
+  return rows
+    .filter((r) => !existingUris.has(r.recordUri))
+    .map((r) => ({
+      uri: r.recordUri,
+      cid: r.recordCid ?? "",
+      authorDid: sessionDid,
+      authorHandle: sessionHandle,
+      authorAvatarUrl: undefined,
+      text: r.text ?? "",
+      createdAt: r.createdAt.toISOString(),
+      depth: 0,
+      labels: [],
+      hasMore: false,
+    }));
 }
