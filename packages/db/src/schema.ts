@@ -1,9 +1,10 @@
-import { pgTable, pgEnum, text, integer, boolean, timestamp, jsonb, bigint, primaryKey, index } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, integer, boolean, timestamp, jsonb, bigint, primaryKey, index, uniqueIndex, serial } from "drizzle-orm/pg-core";
 
 export const photographerStatus = pgEnum("photographer_status",
   ["active", "pending_review", "deactivated", "deregistered", "takedown"]);
 export const backfillStatus = pgEnum("backfill_status", ["pending", "running", "complete", "failed"]);
 export const photoSource = pgEnum("photo_source", ["luminance", "bsky", "grain"]);
+export const interactionKind = pgEnum("interaction_kind", ["like", "comment", "follow"]);
 
 // ---- durable app state ----
 export const photographers = pgTable("photographers", {
@@ -95,3 +96,41 @@ export const seriesPhotos = pgTable("series_photos", {
   primaryKey({ columns: [t.seriesUri, t.photoUri] }),
   index("series_photos_item_idx").on(t.itemUri),
 ]);
+
+// ---- durable app state (phase 2) ----
+export const interactions = pgTable("interactions", {
+  recordUri: text("record_uri").primaryKey(), // the record in the ACTOR's repo
+  actorDid: text("actor_did").notNull(),
+  kind: interactionKind("kind").notNull(),
+  subjectUri: text("subject_uri").notNull(), // post at-uri (like/comment) | photographer did (follow)
+  text: text("text"),
+  recordCid: text("record_cid"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }), // soft delete — count formula needs unlike EVENTS (spec §3)
+}, (t) => [index("interactions_lookup_idx").on(t.actorDid, t.kind, t.subjectUri), index("interactions_subject_idx").on(t.subjectUri)]);
+
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  recipientDid: text("recipient_did").notNull(),
+  actorDid: text("actor_did").notNull(),
+  actorHandle: text("actor_handle").notNull(),
+  actorAvatarUrl: text("actor_avatar_url"),
+  kind: interactionKind("kind").notNull(),
+  subjectUri: text("subject_uri").notNull(), // dedupe identity (spec §3)
+  linkUri: text("link_uri").notNull(),       // navigation target (spec §3)
+  snippet: text("snippet"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+}, (t) => [
+  uniqueIndex("notifications_dedupe_idx").on(t.kind, t.subjectUri, t.actorDid, t.recipientDid),
+  index("notifications_recipient_idx").on(t.recipientDid, t.createdAt.desc()),
+]);
+
+// ---- rebuildable cache (phase 2) ----
+export const engagement = pgTable("engagement", {
+  postUri: text("post_uri").primaryKey(),
+  likeCount: integer("like_count").notNull().default(0),
+  replyCount: integer("reply_count").notNull().default(0),
+  repostCount: integer("repost_count").notNull().default(0), // stored; display deferred (spec §3)
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+});
