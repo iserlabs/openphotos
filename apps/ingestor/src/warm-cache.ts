@@ -25,7 +25,7 @@ export async function warmNewPhotos(db: Db, did: string, opts: {
     .limit(opts.limit ?? 60);
   let warmed = 0;
   for (const r of rows) {
-    for (const preset of ["thumb", "feed"] as const) {
+    for (const preset of ["thumb", "grid", "feed"] as const) {
       try {
         await fetcher(`${base}/img/${encodeURIComponent(r.did)}/${encodeURIComponent(r.blobCid)}/${preset}`);
         warmed++;

@@ -52,6 +52,7 @@ export function PhotoCard({
   height,
   sensitive,
   priority = false,
+  eager = false,
   likeCount,
   replyCount,
   srcSet,
@@ -66,6 +67,12 @@ export function PhotoCard({
   sensitive: boolean;
   /** Above-the-fold LCP candidates: eager-load with a high fetch priority. */
   priority?: boolean;
+  /**
+   * Eager-load without claiming high fetch priority. On the phone's single
+   * column the LCP element is often tile 1 or 2, not tile 0 — a lazy LCP
+   * image is deprioritized by the browser and paints seconds late.
+   */
+  eager?: boolean;
   /**
    * Engagement counts (spec §3): same number on every tile of a multi-image
    * post — by design, since counts are per-post, not per-media-index. Only
@@ -102,7 +109,7 @@ export function PhotoCard({
         alt={alt}
         width={width ?? undefined}
         height={height ?? undefined}
-        loading={priority ? "eager" : "lazy"}
+        loading={priority || eager ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : undefined}
         className="h-full w-full object-cover"
       />

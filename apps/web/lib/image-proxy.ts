@@ -3,7 +3,10 @@ import sharp from "sharp";
 import { photos, photographers, photoOverrides, type Db } from "@luminance/db";
 import { resolvePdsEndpoint, safeFetch } from "@luminance/atproto";
 
-export const PRESETS = { thumb: 512, feed: 1024, full: 2048 } as const;
+// `grid` exists for high-DPR phones: a 412px viewport at DPR 1.75 needs
+// ~720 device px, and without it the srcset jumps 512 → 1024, forcing the
+// full feed rendition (150-286KB avif) over throttled mobile links.
+export const PRESETS = { thumb: 512, grid: 768, feed: 1024, full: 2048 } as const;
 export type Preset = keyof typeof PRESETS;
 
 interface Deps {

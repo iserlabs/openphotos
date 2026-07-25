@@ -50,13 +50,14 @@ export function PhotoGrid({
             key={`${p.atUri}#${p.mediaIndex}`}
             href={`/photo/${encodeURIComponent(parts.did)}/${parts.collection}/${parts.rkey}#i${p.mediaIndex}`}
             src={`${imgBase}/feed`}
-            srcSet={`${imgBase}/thumb 512w, ${imgBase}/feed 1024w`}
+            srcSet={`${imgBase}/thumb 512w, ${imgBase}/grid 768w, ${imgBase}/feed 1024w`}
             sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             alt={p.alt ?? ""}
             width={p.width}
             height={p.height}
             sensitive={isSensitive(p.labels)}
             priority={i === 0}
+            eager={i > 0 && i < 3}
             blurDataUrl={p.blurDataUrl}
             likeCount={c?.likeCount}
             replyCount={c?.replyCount}

@@ -13,7 +13,7 @@ describe("warmNewPhotos", () => {
     expect(urls).toEqual([]);
   });
 
-  it("warms thumb+feed for recently indexed rows of the did only", async () => {
+  it("warms thumb+grid+feed for recently indexed rows of the did only", async () => {
     const db = await createTestDb();
     await db.insert(photographers).values({ did: DID, handle: "k.test" });
     await db.insert(photos).values([
@@ -22,8 +22,9 @@ describe("warmNewPhotos", () => {
     ]);
     const urls: string[] = [];
     const n = await warmNewPhotos(db, DID, { baseUrl: "https://x.test", fetcher: async (u) => { urls.push(u); } });
-    expect(n).toBe(2);
+    expect(n).toBe(3);
     expect(urls.some((u) => u.includes("bafk-new") && u.endsWith("/thumb"))).toBe(true);
+    expect(urls.some((u) => u.includes("bafk-new") && u.endsWith("/grid"))).toBe(true);
     expect(urls.some((u) => u.includes("bafk-new") && u.endsWith("/feed"))).toBe(true);
     expect(urls.some((u) => u.includes("bafk-other"))).toBe(false);
   });
@@ -35,7 +36,7 @@ describe("warmNewPhotos", () => {
     ]);
     let calls = 0;
     const n = await warmNewPhotos(db, DID, { baseUrl: "https://x.test", fetcher: async () => { calls++; if (calls === 1) throw new Error("cold"); } });
-    expect(calls).toBe(2);
-    expect(n).toBe(1);
+    expect(calls).toBe(3);
+    expect(n).toBe(2);
   });
 });
