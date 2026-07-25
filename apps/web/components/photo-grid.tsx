@@ -56,8 +56,8 @@ export function PhotoGrid({
             width={p.width}
             height={p.height}
             sensitive={isSensitive(p.labels)}
-            priority={i === 0}
-            eager={i > 0 && i < 3}
+            priority={i < 2}
+            eager={i >= 2 && i < 4}
             blurDataUrl={p.blurDataUrl}
             likeCount={c?.likeCount}
             replyCount={c?.replyCount}

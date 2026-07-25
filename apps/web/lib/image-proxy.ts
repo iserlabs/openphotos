@@ -65,7 +65,15 @@ export async function proxyImage(
     const wantsAvif = req.accept.includes("image/avif");
     const wantsWebp = req.accept.includes("image/webp");
     let pipe = sharp(buf).rotate().resize({ width, withoutEnlargement: true });
-    pipe = wantsAvif ? pipe.avif({ quality: 70 }) : wantsWebp ? pipe.webp({ quality: 82 }) : pipe.jpeg({ quality: 85 });
+    // Small presets (grid tiles) trade a little quality for mobile LCP — they
+    // render at ~1.2x density where q60 avif is visually clean. feed/full keep
+    // detail-page quality untouched.
+    const small = width <= PRESETS.grid;
+    pipe = wantsAvif
+      ? pipe.avif({ quality: small ? 60 : 70 })
+      : wantsWebp
+        ? pipe.webp({ quality: small ? 75 : 82 })
+        : pipe.jpeg({ quality: small ? 78 : 85 });
     const body = await pipe.toBuffer();
     // Blur-up placeholder: the blob is decoded right here anyway, so the first
     // successful serve of a photo also emits a ~16px webp data URI and stores

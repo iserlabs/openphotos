@@ -1,4 +1,4 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { photos, type Db } from "@luminance/db";
 
 /**
@@ -17,11 +17,16 @@ export async function warmNewPhotos(db: Db, did: string, opts: {
   const base = opts.baseUrl ?? process.env.WARM_BASE_URL;
   if (!base) return 0;
   const fetcher = opts.fetcher ?? (async (u: string) => { await fetch(u, { signal: AbortSignal.timeout(30_000) }); });
-  const since = new Date(Date.now() - (opts.sinceMs ?? 15 * 60 * 1000));
+  // Wide window on purpose: Vercel purges its edge cache on every deploy, so
+  // warming only just-indexed photos leaves the whole catalog cold after each
+  // release. Re-touching the freshest `limit` photos every cycle keeps the CDN
+  // warm continuously (a warm re-request is a cheap edge HIT).
+  const since = new Date(Date.now() - (opts.sinceMs ?? 7 * 24 * 60 * 60 * 1000));
   const rows = await db
     .select({ did: photos.did, blobCid: photos.blobCid })
     .from(photos)
     .where(and(eq(photos.did, did), gt(photos.indexedAt, since)))
+    .orderBy(desc(photos.indexedAt))
     .limit(opts.limit ?? 60);
   let warmed = 0;
   for (const r of rows) {
