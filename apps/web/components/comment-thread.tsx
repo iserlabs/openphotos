@@ -1,8 +1,9 @@
-import { deleteCommentAction } from "@/app/photo/actions";
 import { relativeTime } from "@/lib/relative-time";
 import { safeExternalHref } from "@/lib/safe-href";
 import { isSensitive, splitAtUri } from "@/lib/queries";
 import { SensitiveText } from "./sensitive-text";
+import { DeleteCommentButton } from "./delete-comment-button";
+import { ReplyToggle } from "./reply-toggle";
 import type { CommentNode } from "@/lib/thread";
 
 const INDENT_PX = 20;
@@ -13,21 +14,6 @@ const INDENT_PX = 20;
 function bskyPermalink(atUri: string): string | null {
   const parts = splitAtUri(atUri);
   return parts ? `https://bsky.app/profile/${parts.did}/post/${parts.rkey}` : null;
-}
-
-/**
- * Thin `<form action>` wrapper around `deleteCommentAction`: React's form
- * `action` prop requires a `void`-returning Server Function, but
- * `deleteCommentAction` returns `{ok, error}` (for the client-driven callers
- * in `like-button.tsx`/`comment-composer.tsx`, which display the error).
- * This plain form has nowhere to show an error, so it discards the result —
- * a delete failure just leaves the comment in place, which is self-evident
- * to the viewer. Inlined as a Server Function (`"use server"`) rather than a
- * new exported action, since it's only ever this one call site.
- */
-async function deleteComment(formData: FormData): Promise<void> {
-  "use server";
-  await deleteCommentAction(formData);
 }
 
 /**
@@ -48,9 +34,13 @@ async function deleteComment(formData: FormData): Promise<void> {
 export function CommentThread({
   nodes,
   viewerDid,
+  atUri,
 }: {
   nodes: CommentNode[];
-  viewerDid?: string;
+  viewerDid?: string | null;
+  /** The photo's at-uri — enables the per-node Reply composer when provided
+   * and the viewer is signed in (replies post through the same commentAction). */
+  atUri?: string;
 }) {
   if (nodes.length === 0) {
     return <p className="text-sm text-zinc-500">No comments yet.</p>;
@@ -89,15 +79,16 @@ export function CommentThread({
                 <p className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-300">{node.text}</p>
               </SensitiveText>
 
-              <div className="mt-1 flex items-center gap-3">
-                {isOwn ? (
-                  <form action={deleteComment}>
-                    <input type="hidden" name="recordUri" value={node.uri} />
-                    <button type="submit" className="text-xs text-zinc-600 hover:text-red-400">
-                      Delete
-                    </button>
-                  </form>
+              <div className="mt-1 flex items-start gap-3">
+                {viewerDid && atUri && node.cid ? (
+                  <ReplyToggle
+                    atUri={atUri}
+                    parentUri={node.uri}
+                    parentCid={node.cid}
+                    parentHandle={node.authorHandle}
+                  />
                 ) : null}
+                {isOwn ? <DeleteCommentButton recordUri={node.uri} /> : null}
                 {continueHref ? (
                   <a
                     href={continueHref}

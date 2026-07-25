@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { photographers, notificationsPage, unreadCount } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { safeExternalHref } from "@/lib/safe-href";
 import { splitAtUri } from "@/lib/queries";
 import { relativeTime } from "@/lib/relative-time";
 import { MarkReadOnMount } from "@/components/mark-read-on-mount";
@@ -65,7 +66,27 @@ export default async function NotificationsPage({
 
   const db = getDb();
   const [me] = await db.select({ did: photographers.did }).from(photographers).where(eq(photographers.did, session.did));
-  if (!me) redirect("/login?returnTo=/notifications");
+  // Signed-in viewer who isn't a registered photographer: notifications are a
+  // photographer feature (viewers get theirs in their own Bluesky app). Say so
+  // instead of bouncing an already-authenticated user back to /login.
+  if (!me) {
+    return (
+      <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Notifications</h1>
+        <p className="mt-6 text-sm text-zinc-400">
+          Notifications here are for registered photographers — likes, comments, and follows land in
+          your own Bluesky notifications instead.
+        </p>
+        <p className="mt-3 text-sm text-zinc-400">
+          Are you a photographer?{" "}
+          <Link href="/register" className="text-sky-400 hover:text-sky-300">
+            Register your portfolio
+          </Link>{" "}
+          to collect them here too.
+        </p>
+      </div>
+    );
+  }
 
   const { cursor: cursorParam } = await searchParams;
   const rawCursor = cursorParam ? Number(cursorParam) : undefined;
@@ -105,15 +126,19 @@ export default async function NotificationsPage({
         <ul className="mt-6 divide-y divide-zinc-800">
           {items.map((n) => {
             const href = notificationHref(n);
+            // Scheme-checked like the comment thread's avatars: a stored
+            // avatar URL is untrusted input (AppView/DB), so anything that
+            // isn't plain http(s) renders as the placeholder instead.
+            const avatarHref = safeExternalHref(n.actorAvatarUrl);
             const row = (
               <div className={`flex items-center gap-3 rounded-md px-2 py-4 ${n.readAt == null ? "bg-zinc-900/40" : ""}`}>
-                {n.actorAvatarUrl ? (
+                {avatarHref ? (
                   // Bluesky CDN avatar URL, rendered directly — the documented
                   // proxy exception (spec §11 only allowlists blobs OUR index
                   // references; other actors' avatars are never ours to proxy).
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={n.actorAvatarUrl}
+                    src={avatarHref}
                     alt=""
                     width={40}
                     height={40}

@@ -23,6 +23,13 @@ export async function getPhotographerByHandle(db: Db, handle: string) {
   const [p] = await db.select().from(photographers).where(and(eq(photographers.handle, handle), eq(photographers.status, "active")));
   return p ?? null;
 }
+/** DID-keyed twin of {@link getPhotographerByHandle} — backs the permanent
+ * `/did:…` profile fallback (bookmarked handle URLs orphan on handle change;
+ * the DID never does). */
+export async function getPhotographerByDid(db: Db, did: string) {
+  const [p] = await db.select().from(photographers).where(and(eq(photographers.did, did), eq(photographers.status, "active")));
+  return p ?? null;
+}
 export async function getPhotoRecord(db: Db, atUri: string) {
   const rows = await db.select({ photo: photos, hidden: photoOverrides.hidden, takedown: photoOverrides.takedown })
     .from(photos)

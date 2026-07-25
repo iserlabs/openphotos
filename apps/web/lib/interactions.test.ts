@@ -340,13 +340,22 @@ describe("commentOnPhoto", () => {
       createRecord: async () => ({ data: { uri: replyUri, cid: "bafyc2" } }),
     });
 
-    await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
-      subject: { uri: POST_URI, cid: POST_CID },
-      parent,
-      text: "agreed",
-      photographerDid: PHOTOGRAPHER,
-      photoLinkUri: POST_URI,
-    });
+    await commentOnPhoto(
+      db,
+      async () => agent,
+      VIEWER,
+      "viewer.test",
+      {
+        subject: { uri: POST_URI, cid: POST_CID },
+        parent,
+        text: "agreed",
+        photographerDid: PHOTOGRAPHER,
+        photoLinkUri: POST_URI,
+      },
+      // Parent-ref validation (fast-follow) verifies a non-subject parent
+      // against the AppView — stub it as a legit member of this thread.
+      { fetchParent: async () => ({ cid: parent.cid, rootUri: POST_URI }) },
+    );
 
     expect(createRecord).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -697,5 +706,168 @@ describe("unfollowPhotographer", () => {
     expect(result).toEqual({ ok: false, error: "unfollow in your Bluesky app" });
     expect(listRecords).not.toHaveBeenCalled();
     expect(deleteRecord).not.toHaveBeenCalled();
+  });
+});
+
+// ---- fast-follow coverage: self-heal parity, session expiry, reply parents,
+// ---- write-through notification avatars ------------------------------------
+
+describe("commentOnPhoto self-heal parity", () => {
+  it("PDS reply created, DB write throws -> {ok:false}, no crash", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const { agent, createRecord } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.feed.post/c1", cid: "bafyreply1" } }),
+    });
+    const result = await commentOnPhoto(withFailingInsert(db), async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "nice shot",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+    expect(result.ok).toBe(false);
+    expect(createRecord).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(interactions)).toHaveLength(0);
+  });
+});
+
+describe("followPhotographer self-heal parity", () => {
+  it("PDS follow created, DB write throws -> {ok:false}, no crash", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const { agent, createRecord } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.graph.follow/f1", cid: "bafyfollow1" } }),
+    });
+    const result = await followPhotographer(withFailingInsert(db), async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+    });
+    expect(result.ok).toBe(false);
+    expect(createRecord).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(interactions)).toHaveLength(0);
+  });
+});
+
+describe("expired-session detection", () => {
+  const throwingFactory = async () => {
+    throw new Error("restore failed: token revoked");
+  };
+  it("likePhoto surfaces {ok:false, error: 'session-expired'} when the agent can't be restored", async () => {
+    const db = await createTestDb();
+    const result = await likePhoto(db, throwingFactory, VIEWER, makeSubject());
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+  it("commentOnPhoto surfaces the sentinel too", async () => {
+    const db = await createTestDb();
+    const result = await commentOnPhoto(db, throwingFactory, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "hello",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+  it("followPhotographer surfaces the sentinel too", async () => {
+    const db = await createTestDb();
+    const result = await followPhotographer(db, throwingFactory, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+    });
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+});
+
+describe("reply parent-ref validation", () => {
+  const PARENT_URI = "at://did:plc:other/app.bsky.feed.post/c9";
+  const input = (parent: { uri: string; cid: string }) => ({
+    subject: { uri: POST_URI, cid: POST_CID },
+    parent,
+    text: "replying",
+    photographerDid: PHOTOGRAPHER,
+    photoLinkUri: POST_URI,
+  });
+
+  it("accepts a parent that belongs to this photo's thread (root matches, cid matches)", async () => {
+    const db = await createTestDb();
+    const { agent, createRecord } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.feed.post/r1", cid: "bafyr1" } }),
+    });
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", input({ uri: PARENT_URI, cid: "bafyparent" }), {
+      fetchParent: async () => ({ cid: "bafyparent", rootUri: POST_URI }),
+    });
+    expect(result.ok).toBe(true);
+    const record = (createRecord.mock.calls[0][0] as { record: { reply: { root: { uri: string }; parent: { uri: string } } } }).record;
+    expect(record.reply.root.uri).toBe(POST_URI);
+    expect(record.reply.parent.uri).toBe(PARENT_URI);
+  });
+
+  it("rejects a parent from an unrelated thread (root mismatch); createRecord never called", async () => {
+    const db = await createTestDb();
+    const { agent, createRecord } = makeFakeAgent();
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", input({ uri: PARENT_URI, cid: "bafyparent" }), {
+      fetchParent: async () => ({ cid: "bafyparent", rootUri: "at://did:plc:elsewhere/app.bsky.feed.post/x" }),
+    });
+    expect(result).toEqual({ ok: false, error: "that comment can't be replied to" });
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale/spoofed parent cid; createRecord never called", async () => {
+    const db = await createTestDb();
+    const { agent, createRecord } = makeFakeAgent();
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", input({ uri: PARENT_URI, cid: "bafyWRONG" }), {
+      fetchParent: async () => ({ cid: "bafyparent", rootUri: POST_URI }),
+    });
+    expect(result.ok).toBe(false);
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("rejects a vanished parent (fetch returns null / throws)", async () => {
+    const db = await createTestDb();
+    const { agent, createRecord } = makeFakeAgent();
+    const gone = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", input({ uri: PARENT_URI, cid: "bafyparent" }), {
+      fetchParent: async () => null,
+    });
+    const threw = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", input({ uri: PARENT_URI, cid: "bafyparent" }), {
+      fetchParent: async () => {
+        throw new Error("appview down");
+      },
+    });
+    expect(gone.ok).toBe(false);
+    expect(threw.ok).toBe(false);
+    expect(createRecord).not.toHaveBeenCalled();
+  });
+
+  it("skips validation entirely for a top-level comment (parent === subject)", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => ({ data: { uri: "at://did:plc:viewer/app.bsky.feed.post/r2", cid: "bafyr2" } }),
+    });
+    const fetchParent = vi.fn(async () => null);
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", input({ uri: POST_URI, cid: POST_CID }), {
+      fetchParent,
+    });
+    expect(result.ok).toBe(true);
+    expect(fetchParent).not.toHaveBeenCalled();
+  });
+});
+
+describe("write-through notification avatars", () => {
+  it("stores the resolved avatar on a like notification", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const { agent } = makeFakeAgent();
+    const result = await likePhoto(db, async () => agent, VIEWER, makeSubject(), {
+      resolveAvatar: async () => "https://cdn.bsky.app/avatar.jpg",
+    });
+    expect(result.ok).toBe(true);
+    const [n] = await db.select().from(notifications);
+    expect(n.actorAvatarUrl).toBe("https://cdn.bsky.app/avatar.jpg");
+  });
+  it("defaults to a null avatar when no resolver is provided (tests, degraded paths)", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: PHOTOGRAPHER, handle: "photog.test" });
+    const { agent } = makeFakeAgent();
+    const result = await likePhoto(db, async () => agent, VIEWER, makeSubject());
+    expect(result.ok).toBe(true);
+    const [n] = await db.select().from(notifications);
+    expect(n.actorAvatarUrl).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ import {
   commentOnPhoto,
   deleteOwnComment,
   restoreAgent,
+  resolveActorAvatar,
   RateLimitError,
 } from "@/lib/interactions";
 
@@ -40,13 +41,19 @@ export async function likeActionCore(
   if (!routed.supported) return { ok: false, error: "interactions arrive with portfolio publishing" };
 
   try {
-    return await likePhoto(db, (did) => restoreAgent(db, did), session.did, {
-      uri: routed.subject.uri,
-      cid: routed.subject.cid,
-      photographerDid: record.photographer.did,
-      photoLinkUri: atUri,
-      actorHandle: session.handle ?? session.did,
-    });
+    return await likePhoto(
+      db,
+      (did) => restoreAgent(db, did),
+      session.did,
+      {
+        uri: routed.subject.uri,
+        cid: routed.subject.cid,
+        photographerDid: record.photographer.did,
+        photoLinkUri: atUri,
+        actorHandle: session.handle ?? session.did,
+      },
+      { resolveAvatar: resolveActorAvatar },
+    );
   } catch (err) {
     if (err instanceof RateLimitError) return { ok: false, error: "Slow down — you're interacting a lot right now." };
     return { ok: false, error: "something went wrong — please try again" };
@@ -129,13 +136,20 @@ export async function commentActionCore(
   const parent = parentUri && parentCid ? { uri: parentUri, cid: parentCid } : undefined;
 
   try {
-    return await commentOnPhoto(db, (did) => restoreAgent(db, did), session.did, session.handle ?? session.did, {
-      subject: routed.subject,
-      parent,
-      text,
-      photographerDid: record.photographer.did,
-      photoLinkUri: atUri,
-    });
+    return await commentOnPhoto(
+      db,
+      (did) => restoreAgent(db, did),
+      session.did,
+      session.handle ?? session.did,
+      {
+        subject: routed.subject,
+        parent,
+        text,
+        photographerDid: record.photographer.did,
+        photoLinkUri: atUri,
+      },
+      { resolveAvatar: resolveActorAvatar },
+    );
   } catch (err) {
     if (err instanceof RateLimitError) return { ok: false, error: "Slow down — you're interacting a lot right now." };
     return { ok: false, error: "something went wrong — please try again" };

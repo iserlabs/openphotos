@@ -129,12 +129,20 @@ export default async function SettingsPage({
               Refreshing from your data server… this page will show new photos shortly.
             </p>
           ) : (
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white"
-            >
-              Refresh my photos
-            </button>
+            <>
+              {me.backfillStatus === "failed" ? (
+                <p className="mb-2 text-sm text-amber-400">
+                  The last refresh didn&apos;t finish — your data server may have been unreachable.
+                  Retry below; if it keeps failing, it will also retry automatically.
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white"
+              >
+                {me.backfillStatus === "failed" ? "Retry refresh" : "Refresh my photos"}
+              </button>
+            </>
           )}
           <p className="mt-1 text-xs text-zinc-500">
             Just posted on Bluesky and don&apos;t see it here? This pulls your latest photos in

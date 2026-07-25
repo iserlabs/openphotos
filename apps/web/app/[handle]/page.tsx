@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { unstable_cache } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
-import { feedPage, engagementFor, findInteraction, photos, photoOverrides, series as seriesTable } from "@luminance/db";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { feedPage, engagementFor, findInteraction, photos, photoOverrides, series as seriesTable, seriesPhotos } from "@luminance/db";
 import { AppView } from "@luminance/atproto";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
-import { getPhotographerByHandle, splitAtUri } from "@/lib/queries";
+import { getPhotographerByHandle, getPhotographerByDid, splitAtUri } from "@/lib/queries";
 import { safeExternalHref } from "@/lib/safe-href";
 import { PhotoGrid } from "@/components/photo-grid";
 import { FollowButton } from "@/components/follow-button";
@@ -44,14 +45,30 @@ async function getFollowerCount(did: string): Promise<number | null> {
   }
 }
 
+// Next 16 delivers PAGE params percent-encoded (same quirk as the photo
+// page): a `/did:plc:…` fallback URL arrives as `did%3Aplc%3A…`.
+function decodeParam(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+// Per-request memo: generateMetadata and the page body both resolve the same
+// photographer; keyed on the handle string (the params objects differ).
+const cachedByHandle = cache((handle: string) => getPhotographerByHandle(getDb(), handle));
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ handle: string }>;
 }): Promise<Metadata> {
-  const { handle } = await params;
+  const { handle: rawHandle } = await params;
+  const handle = decodeParam(rawHandle);
+  if (handle.startsWith("did:")) return {}; // the page itself redirects to the current handle
   const db = getDb();
-  const photographer = await getPhotographerByHandle(db, handle);
+  const photographer = await cachedByHandle(handle);
   if (!photographer) return {};
 
   const title = photographer.displayName ?? photographer.handle;
@@ -71,12 +88,23 @@ export async function generateMetadata({
 
 export default async function ProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ handle: string }>;
+  searchParams: Promise<{ cursor?: string }>;
 }) {
-  const { handle } = await params;
+  const { handle: rawHandle } = await params;
+  const handle = decodeParam(rawHandle);
+  // Permanent DID-keyed fallback: `/did:plc:…` always lands on the CURRENT
+  // handle's profile, so bookmarks survive handle changes (handles never
+  // contain `:`, so this prefix can't collide with a real handle).
+  if (handle.startsWith("did:")) {
+    const byDid = await getPhotographerByDid(getDb(), handle);
+    if (!byDid) notFound();
+    redirect(`/${byDid.handle}`);
+  }
   const db = getDb();
-  const photographer = await getPhotographerByHandle(db, handle);
+  const photographer = await cachedByHandle(handle);
   if (!photographer) notFound();
 
   const websiteHref = safeExternalHref(photographer.website);
@@ -89,7 +117,8 @@ export default async function ProfilePage({
   // `engagementFor` into a single Promise.all with the rest so it runs
   // concurrently with whichever of them is still in flight instead of being
   // awaited sequentially after all four already resolved.
-  const itemsPromise = feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did });
+  const { cursor: cursorParam } = await searchParams;
+  const itemsPromise = feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did, cursor: cursorParam });
   const seriesRowsPromise = db
     .select({
       atUri: seriesTable.atUri,
@@ -110,7 +139,7 @@ export default async function ProfilePage({
   const viewerFollowPromise =
     session.did && !isOwnProfile ? findInteraction(db, session.did, "follow", photographer.did) : Promise.resolve(null);
 
-  const { items } = await itemsPromise;
+  const { items, cursor: nextCursor } = await itemsPromise;
 
   // ONE grouped engagementFor call per page render (spec §3 constraint —
   // never per-tile). Only bsky-source posts have real engagement; dedupe
@@ -123,6 +152,40 @@ export default async function ProfilePage({
     viewerFollowPromise,
     engagementFor(db, bskyUris),
   ]);
+
+  // Cover fallback for series without a coverPhotoUri (Grain galleries never
+  // set one): use the series' first item's photo. One query for all uncovered
+  // series, grouped in JS by position order.
+  const uncovered = seriesRows.filter((s) => !s.coverBlobCid).map((s) => s.atUri);
+  if (uncovered.length > 0) {
+    const firstItems = await db
+      .select({
+        seriesUri: seriesPhotos.seriesUri,
+        position: seriesPhotos.position,
+        blobCid: photos.blobCid,
+        did: photos.did,
+      })
+      .from(seriesPhotos)
+      .innerJoin(photos, and(eq(photos.atUri, seriesPhotos.photoUri), eq(photos.mediaIndex, 0)))
+      .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
+      .where(and(
+        inArray(seriesPhotos.seriesUri, uncovered),
+        sql`coalesce(${photoOverrides.hidden}, false) = false`,
+        sql`coalesce(${photoOverrides.takedown}, false) = false`,
+      ))
+      .orderBy(asc(seriesPhotos.position));
+    const firstBySeries = new Map<string, { blobCid: string; did: string }>();
+    for (const f of firstItems) {
+      if (!firstBySeries.has(f.seriesUri)) firstBySeries.set(f.seriesUri, { blobCid: f.blobCid, did: f.did });
+    }
+    for (const s of seriesRows) {
+      const fallback = !s.coverBlobCid ? firstBySeries.get(s.atUri) : undefined;
+      if (fallback) {
+        s.coverBlobCid = fallback.blobCid;
+        s.coverDid = fallback.did;
+      }
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -214,10 +277,22 @@ export default async function ProfilePage({
 
       <section className="mt-8">
         {items.length === 0 ? (
-          <p className="py-16 text-center text-sm text-zinc-500">No photos indexed yet.</p>
+          <p className="py-16 text-center text-sm text-zinc-500">
+            {cursorParam ? "No more photos." : "No photos indexed yet."}
+          </p>
         ) : (
           <PhotoGrid items={items} counts={counts} />
         )}
+        {nextCursor ? (
+          <div className="mt-8 flex justify-center pb-4">
+            <Link
+              href={`/${photographer.handle}?cursor=${encodeURIComponent(nextCursor)}`}
+              className="rounded-md border border-zinc-800 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+            >
+              Load more
+            </Link>
+          </div>
+        ) : null}
       </section>
     </div>
   );

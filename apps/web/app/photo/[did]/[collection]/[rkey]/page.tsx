@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { unstable_cache } from "next/cache";
 import { AppView, type ThreadView } from "@luminance/atproto";
-import { engagementFor, findInteraction, type Db } from "@luminance/db";
+import { engagementFor, findInteraction } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
@@ -15,6 +16,7 @@ import { SensitiveImage } from "@/components/photo-card";
 import { LikeButton } from "@/components/like-button";
 import { CommentThread } from "@/components/comment-thread";
 import { CommentComposer } from "@/components/comment-composer";
+import { LightboxProvider, LightboxTrigger } from "@/components/lightbox";
 
 // Live DB per request — moderation/label state must always be current.
 export const dynamic = "force-dynamic";
@@ -63,9 +65,15 @@ const getCachedThread = unstable_cache(
   { revalidate: 60, tags: ["photo-threads"] },
 );
 
-async function load(db: Db, { did, collection, rkey }: Params) {
+// React.cache: generateMetadata and the page body both need this record, and
+// Next runs them as separate calls in the same request — per-request memoized
+// on the at-uri (a primitive key; the params OBJECTS differ between the two
+// calls, so keying on them would never hit).
+const cachedGetPhotoRecord = cache((atUri: string) => getPhotoRecord(getDb(), atUri));
+
+async function load({ did, collection, rkey }: Params) {
   const atUri = buildAtUri(decodeParam(did), decodeParam(collection), decodeParam(rkey));
-  return getPhotoRecord(db, atUri);
+  return cachedGetPhotoRecord(atUri);
 }
 
 export async function generateMetadata({
@@ -74,7 +82,7 @@ export async function generateMetadata({
   params: Promise<Params>;
 }): Promise<Metadata> {
   const p = await params;
-  const rec = await load(getDb(), p);
+  const rec = await load(p);
   if (!rec) return {};
 
   const first = rec.items[0];
@@ -94,7 +102,7 @@ export async function generateMetadata({
 
 export default async function PhotoDetailPage({ params }: { params: Promise<Params> }) {
   const p = await params;
-  const rec = await load(getDb(), p);
+  const rec = await load(p);
   if (!rec) notFound();
   const { items, photographer } = rec;
   const decodedDid = decodeParam(p.did);
@@ -162,6 +170,12 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
         ) : null}
       </header>
 
+      <LightboxProvider
+        items={items.map((photo) => ({
+          src: `/img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/full`,
+          alt: photo.alt ?? "",
+        }))}
+      >
       <div className="mt-8 space-y-12">
         {items.map((photo, i) => {
           // Practically at most one item ever carries a title (only bsky
@@ -178,6 +192,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
           return (
             <figure key={photo.mediaIndex} id={`i${photo.mediaIndex}`} className="scroll-mt-6">
               <SensitiveImage sensitive={isSensitive(photo.labels)}>
+                <LightboxTrigger index={i}>
                 <div
                   style={{
                     aspectRatio: `${photo.width ?? 3}/${photo.height ?? 2}`,
@@ -202,6 +217,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
                     className="h-full w-full object-contain"
                   />
                 </div>
+                </LightboxTrigger>
               </SensitiveImage>
 
               {photo.title ? (
@@ -244,6 +260,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
           );
         })}
       </div>
+      </LightboxProvider>
 
       <section className="mt-12 border-t border-zinc-800 pt-8">
         {routed.supported ? (
@@ -263,7 +280,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
                 {threadUnavailable ? (
                   <p className="text-sm text-zinc-500">Comments temporarily unavailable</p>
                 ) : (
-                  <CommentThread nodes={commentNodes} viewerDid={session.did} />
+                  <CommentThread nodes={commentNodes} viewerDid={session.did} atUri={atUri} />
                 )}
               </div>
 

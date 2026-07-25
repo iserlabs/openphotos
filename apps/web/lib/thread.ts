@@ -41,7 +41,7 @@ type RawNode = {
   post?: {
     uri: string;
     cid: string;
-    author: { did: string; handle: string; avatar?: string };
+    author: { did: string; handle: string; avatar?: string; labels?: RawLabel[] };
     record: { text: string; createdAt?: string };
     labels?: RawLabel[];
     indexedAt?: string;
@@ -86,7 +86,10 @@ export function flattenThread(thread: ThreadView, opts: { maxDepth: number }): C
         text: post.record.text,
         createdAt: post.record.createdAt ?? post.indexedAt ?? "",
         depth,
-        labels: (post.labels ?? []).map((l) => l.val),
+        // Union of the reply's own labels AND its author's account-level
+        // labels — an author-labeled account's replies must blur consistently
+        // with how their photos blur (fast-follow: author-label blur union).
+        labels: [...(post.labels ?? []), ...(post.author.labels ?? [])].map((l) => l.val),
         hasMore: clipped,
       });
 

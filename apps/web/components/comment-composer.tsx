@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { commentAction } from "@/app/photo/actions";
+import { SESSION_EXPIRED_ERROR, loginHref } from "@/lib/interaction-errors";
 
 // Mirrors COMMENT_MAX_GRAPHEMES in packages/atproto/src/interaction-records.ts
 // (the actual server-enforced cap, keyed off app.bsky.feed.post's own text
@@ -42,6 +43,7 @@ export function CommentComposer({
   placeholder?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -68,6 +70,10 @@ export function CommentComposer({
     startTransition(async () => {
       const result = await commentAction(formData);
       if (!result.ok) {
+        if (result.error === SESSION_EXPIRED_ERROR) {
+          router.push(loginHref(pathname));
+          return;
+        }
         setError(result.error);
         return;
       }

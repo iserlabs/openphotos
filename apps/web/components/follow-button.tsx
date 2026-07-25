@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { followAction, unfollowAction } from "@/app/[handle]/actions";
+import { SESSION_EXPIRED_ERROR, loginHref } from "@/lib/interaction-errors";
 
 /**
  * Profile-page follow/unfollow control. Three states:
@@ -59,6 +60,8 @@ export function FollowButton({
       if (result.ok) {
         setFollowing((f) => !f);
         router.refresh();
+      } else if (result.error === SESSION_EXPIRED_ERROR) {
+        router.push(loginHref(`/${photographerHandle}`));
       } else {
         setError(result.error);
       }

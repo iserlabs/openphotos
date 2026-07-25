@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { likeAction, unlikeAction } from "@/app/photo/actions";
+import { SESSION_EXPIRED_ERROR, loginHref } from "@/lib/interaction-errors";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   return (
@@ -93,6 +94,10 @@ export function LikeButton({
       const result = next ? await likeAction(formData) : await unlikeAction(formData);
       if (!result.ok) {
         setOptimistic(null);
+        if (result.error === SESSION_EXPIRED_ERROR) {
+          router.push(loginHref(returnTo));
+          return;
+        }
         setError(result.error);
         return;
       }

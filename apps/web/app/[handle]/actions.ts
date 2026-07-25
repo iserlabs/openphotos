@@ -3,7 +3,7 @@
 import type { Db } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { followPhotographer, unfollowPhotographer, restoreAgent, RateLimitError } from "@/lib/interactions";
+import { followPhotographer, unfollowPhotographer, restoreAgent, resolveActorAvatar, RateLimitError } from "@/lib/interactions";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -32,9 +32,14 @@ export async function followActionCore(
   if (!photographerDid) return { ok: false, error: "missing photographer" };
 
   try {
-    return await followPhotographer(db, (did) => restoreAgent(db, did), session.did, session.handle ?? session.did, {
-      photographerDid,
-    });
+    return await followPhotographer(
+      db,
+      (did) => restoreAgent(db, did),
+      session.did,
+      session.handle ?? session.did,
+      { photographerDid },
+      { resolveAvatar: resolveActorAvatar },
+    );
   } catch (err) {
     if (err instanceof RateLimitError) return { ok: false, error: "Slow down — you're interacting a lot right now." };
     return { ok: false, error: "something went wrong — please try again" };

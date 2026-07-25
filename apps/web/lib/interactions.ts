@@ -9,9 +9,10 @@ import {
   pushNotification,
   type Db,
 } from "@luminance/db";
-import { buildLikeRecord, buildReplyRecord, buildFollowRecord, graphemeSlice } from "@luminance/atproto";
+import { AppView, buildLikeRecord, buildReplyRecord, buildFollowRecord, graphemeSlice } from "@luminance/atproto";
 import { getOAuthClient } from "./oauth";
 import { splitAtUri } from "./queries";
+import { SESSION_EXPIRED_ERROR } from "./interaction-errors";
 
 const LIKE_COLLECTION = "app.bsky.feed.like";
 const POST_COLLECTION = "app.bsky.feed.post";
@@ -82,6 +83,40 @@ export async function restoreAgent(db: Db, did: string): Promise<Agent> {
   return new Agent(session);
 }
 
+/**
+ * Calls the agent factory, translating a restore failure (revoked/expired
+ * OAuth session — `client.restore` throws) into the {@link SESSION_EXPIRED_ERROR}
+ * sentinel so client components can route the viewer to re-auth instead of
+ * rendering a dead generic error. Every interaction below goes through this.
+ */
+async function getAgentOrExpired(
+  agentFactory: AgentFactory,
+  actorDid: string,
+): Promise<{ agent: Agent } | { agent: null; error: string }> {
+  try {
+    return { agent: await agentFactory(actorDid) };
+  } catch {
+    return { agent: null, error: SESSION_EXPIRED_ERROR };
+  }
+}
+
+/**
+ * Best-effort actor-avatar snapshot for write-through notifications (the
+ * sweep path snapshots avatars; this fills the same field at interaction
+ * time so fresh notifications aren't avatar-less). Public AppView lookup,
+ * null on any failure — never blocks or fails the interaction.
+ */
+export async function resolveActorAvatar(did: string): Promise<string | null> {
+  try {
+    return (await new AppView().getProfile(did)).avatar ?? null;
+  } catch {
+    return null;
+  }
+}
+
+type InteractionDeps = { resolveAvatar?: (did: string) => Promise<string | null> };
+const NO_AVATAR = async () => null;
+
 // ---- like / unlike (spec §4) ------------------------------------------------
 
 export type LikeSubject = {
@@ -99,23 +134,15 @@ export type LikeSubject = {
 
 type ServiceResult = { ok: true } | { ok: false; error: string };
 
-async function isRegisteredPhotographer(db: Db, did: string): Promise<boolean> {
-  const [row] = await db
-    .select({ did: photographers.did })
-    .from(photographers)
-    .where(and(eq(photographers.did, did), eq(photographers.status, "active")));
-  return row != null;
-}
-
 /**
- * Like {@link isRegisteredPhotographer}, but returns the row (did + handle)
- * instead of a boolean. Used by {@link followPhotographer}, whose notification
- * `linkUri` is built from the photographer's *handle* — that handle MUST come
- * from this server-side lookup, never from client-supplied input (a form
- * field, or anything else on the caller's `FollowTarget`), since the client
- * can't be trusted to submit its own notification routing.
+ * The single active-photographer lookup (consolidation of the former
+ * `isRegisteredPhotographer` boolean twin — callers needing only existence
+ * compare against null). Returns did + handle. The handle MUST come from this
+ * server-side lookup, never from client-supplied input (a form field, or
+ * anything else on a caller's target type), since the client can't be trusted
+ * to submit its own notification routing.
  */
-async function getActivePhotographer(db: Db, did: string): Promise<{ did: string; handle: string } | null> {
+export async function getActivePhotographer(db: Db, did: string): Promise<{ did: string; handle: string } | null> {
   const [row] = await db
     .select({ did: photographers.did, handle: photographers.handle })
     .from(photographers)
@@ -138,10 +165,13 @@ export async function likePhoto(
   agentFactory: AgentFactory,
   actorDid: string,
   subject: LikeSubject,
+  deps: InteractionDeps = {},
 ): Promise<ServiceResult> {
   await assertRateLimit(db, actorDid);
 
-  const agent = await agentFactory(actorDid);
+  const restored = await getAgentOrExpired(agentFactory, actorDid);
+  if (!restored.agent) return { ok: false, error: restored.error };
+  const agent = restored.agent;
   let created: { uri: string; cid: string };
   try {
     const res = await agent.com.atproto.repo.createRecord({
@@ -162,11 +192,12 @@ export async function likePhoto(
       subjectUri: subject.uri,
       recordCid: created.cid,
     });
-    if (subject.photographerDid !== actorDid && (await isRegisteredPhotographer(db, subject.photographerDid))) {
+    if (subject.photographerDid !== actorDid && (await getActivePhotographer(db, subject.photographerDid))) {
       await pushNotification(db, {
         recipientDid: subject.photographerDid,
         actorDid,
         actorHandle: subject.actorHandle,
+        actorAvatarUrl: await (deps.resolveAvatar ?? NO_AVATAR)(actorDid),
         kind: "like",
         subjectUri: subject.uri,
         linkUri: subject.photoLinkUri,
@@ -222,7 +253,9 @@ export async function unlikePhoto(
   actorDid: string,
   subjectUri: string,
 ): Promise<ServiceResult> {
-  const agent = await agentFactory(actorDid);
+  const restored = await getAgentOrExpired(agentFactory, actorDid);
+  if (!restored.agent) return { ok: false, error: restored.error };
+  const agent = restored.agent;
   const existing = await findInteraction(db, actorDid, "like", subjectUri);
 
   // Try to parse rkey from stored record; fall back to paging if missing or unparseable
@@ -286,10 +319,29 @@ export async function commentOnPhoto(
   actorDid: string,
   actorHandle: string,
   input: CommentInput,
+  deps: InteractionDeps & { fetchParent?: (uri: string) => Promise<{ cid: string; rootUri: string | null } | null> } = {},
 ): Promise<ServiceResult> {
   await assertRateLimit(db, actorDid);
 
   const parent = input.parent ?? input.subject;
+  // Parent-ref validation (reply-to-comment): a client-supplied parent that
+  // isn't the photo's own post must be verified server-side before we build a
+  // record around it — its cid must match, and it must actually belong to THIS
+  // photo's thread (its reply root === our subject). Otherwise a crafted
+  // parent could graft the viewer's reply onto an unrelated thread.
+  if (input.parent && input.parent.uri !== input.subject.uri) {
+    const fetchParent = deps.fetchParent ?? defaultFetchParent;
+    let verified: { cid: string; rootUri: string | null } | null;
+    try {
+      verified = await fetchParent(input.parent.uri);
+    } catch {
+      verified = null;
+    }
+    if (!verified || verified.cid !== input.parent.cid || verified.rootUri !== input.subject.uri) {
+      return { ok: false, error: "that comment can't be replied to" };
+    }
+  }
+
   let record: ReturnType<typeof buildReplyRecord>;
   try {
     record = buildReplyRecord(input.text, input.subject, parent);
@@ -297,7 +349,9 @@ export async function commentOnPhoto(
     return { ok: false, error: err instanceof Error ? err.message : "invalid comment" };
   }
 
-  const agent = await agentFactory(actorDid);
+  const restored = await getAgentOrExpired(agentFactory, actorDid);
+  if (!restored.agent) return { ok: false, error: restored.error };
+  const agent = restored.agent;
   let created: { uri: string; cid: string };
   try {
     const res = await agent.com.atproto.repo.createRecord({
@@ -319,11 +373,12 @@ export async function commentOnPhoto(
       text: input.text,
       recordCid: created.cid,
     });
-    if (input.photographerDid !== actorDid && (await isRegisteredPhotographer(db, input.photographerDid))) {
+    if (input.photographerDid !== actorDid && (await getActivePhotographer(db, input.photographerDid))) {
       await pushNotification(db, {
         recipientDid: input.photographerDid,
         actorDid,
         actorHandle,
+        actorAvatarUrl: await (deps.resolveAvatar ?? NO_AVATAR)(actorDid),
         kind: "comment",
         // The reply's own record uri is the dedupe identity here (schema §3) —
         // unlike a like (one per post), a viewer can leave many comments on the
@@ -347,6 +402,18 @@ export async function commentOnPhoto(
  * record's repo DID (parsed from `recordUri`) must equal `actorDid` — before
  * ever touching the agent or the PDS.
  */
+/**
+ * Resolve a prospective reply parent via the public AppView: its current cid
+ * and its thread root (`record.reply.root.uri`; null for a top-level post).
+ * Returns null when the post doesn't exist or isn't visible.
+ */
+async function defaultFetchParent(uri: string): Promise<{ cid: string; rootUri: string | null } | null> {
+  const [post] = await new AppView().getPosts([uri]);
+  if (!post) return null;
+  const record = post.record as { reply?: { root?: { uri?: string } } };
+  return { cid: post.cid, rootUri: record.reply?.root?.uri ?? null };
+}
+
 export async function deleteOwnComment(
   db: Db,
   agentFactory: AgentFactory,
@@ -367,9 +434,10 @@ export async function deleteOwnComment(
     return { ok: false, error: "not a comment" };
   }
 
-  const agent = await agentFactory(actorDid);
+  const restored = await getAgentOrExpired(agentFactory, actorDid);
+  if (!restored.agent) return { ok: false, error: restored.error };
   try {
-    await agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: parts.collection, rkey: parts.rkey });
+    await restored.agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: parts.collection, rkey: parts.rkey });
   } catch {
     return { ok: false, error: "could not delete the comment on Bluesky" };
   }
@@ -408,10 +476,13 @@ export async function followPhotographer(
   actorDid: string,
   actorHandle: string,
   target: FollowTarget,
+  deps: InteractionDeps = {},
 ): Promise<ServiceResult> {
   await assertRateLimit(db, actorDid);
 
-  const agent = await agentFactory(actorDid);
+  const restored = await getAgentOrExpired(agentFactory, actorDid);
+  if (!restored.agent) return { ok: false, error: restored.error };
+  const agent = restored.agent;
 
   // Push the follow notification per the normal gating (registered photographer,
   // not a self-follow). Shared by the adopt and create paths below so both stay
@@ -424,6 +495,7 @@ export async function followPhotographer(
         recipientDid: photographer.did,
         actorDid,
         actorHandle,
+        actorAvatarUrl: await (deps.resolveAvatar ?? NO_AVATAR)(actorDid),
         kind: "follow",
         subjectUri: target.photographerDid,
         linkUri: `/${photographer.handle}`,
@@ -509,9 +581,10 @@ export async function unfollowPhotographer(
   const rkey = existing ? splitAtUri(existing.recordUri)?.rkey : null;
   if (!existing || !rkey) return { ok: false, error: "unfollow in your Bluesky app" };
 
-  const agent = await agentFactory(actorDid);
+  const restored = await getAgentOrExpired(agentFactory, actorDid);
+  if (!restored.agent) return { ok: false, error: restored.error };
   try {
-    await agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: FOLLOW_COLLECTION, rkey });
+    await restored.agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: FOLLOW_COLLECTION, rkey });
   } catch {
     return { ok: false, error: "could not unfollow on Bluesky" };
   }
