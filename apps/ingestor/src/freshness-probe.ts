@@ -30,6 +30,7 @@ export function createFreshnessProbe(db: Db, opts: {
   const lastRev = new Map<string, string>();
   const pdsCache = new Map<string, { endpoint: string; at: number }>();
   const PDS_TTL_MS = 60 * 60 * 1000;
+  let lastChangeAt: number | null = null;
 
   async function probeOnce(): Promise<void> {
     const active = await db
@@ -49,8 +50,11 @@ export function createFreshnessProbe(db: Db, opts: {
         if (typeof res?.rev !== "string" || !res.rev) continue;
         const prev = lastRev.get(p.did);
         lastRev.set(p.did, res.rev);
-        if (prev !== undefined && prev !== res.rev && p.backfillStatus !== "pending") {
-          await db.update(photographers).set({ backfillStatus: "pending" }).where(eq(photographers.did, p.did));
+        if (prev !== undefined && prev !== res.rev) {
+          lastChangeAt = Date.now(); // PDS-truth activity signal (cursor-lag alert gating)
+          if (p.backfillStatus !== "pending") {
+            await db.update(photographers).set({ backfillStatus: "pending" }).where(eq(photographers.did, p.did));
+          }
         }
       } catch (err) {
         // Best-effort per photographer — a flaky PDS must not stop the probe.
@@ -62,6 +66,11 @@ export function createFreshnessProbe(db: Db, opts: {
   let timer: ReturnType<typeof setInterval> | undefined;
   return {
     probeOnce,
+    /** When any watched repo's rev last changed (null = none observed yet).
+     * The cursor-lag monitor uses this to distinguish "the filter is quiet"
+     * (no repo activity — lag growing is normal) from "events exist upstream
+     * but aren't reaching us" (alert-worthy starvation). */
+    lastRevChangeAt: () => lastChangeAt,
     start() {
       timer = setInterval(() => {
         void probeOnce().catch((err) => console.error("freshness probe: tick failed", err));

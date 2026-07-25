@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
-import { photographers, photos, engagement, interactions, pushNotification, ABSORPTION_GRACE_MS, type Db } from "@luminance/db";
+import { photographers, photos, engagement, interactions, oauthStates, pushNotification, ABSORPTION_GRACE_MS, type Db } from "@luminance/db";
 import type { PostView, ThreadView, LikeView, ActorView } from "@luminance/atproto";
 import { graphemeSlice } from "@luminance/atproto";
 import { Sentry, sentryEnabled } from "./sentry.js";
@@ -24,6 +24,10 @@ export interface SweepResult {
   requestsPerSweep: number;
   intervalMs: number;
   aborted: boolean;
+  /** True when the abort was specifically a 429 — drives the extra backoff
+   * multiplier in the scheduler (a sustained rate-limit storm must back off
+   * faster than the plain request-count governor). */
+  rateLimited: boolean;
 }
 
 const BASE_INTERVAL_MS = 180_000; // 3 min base (spec §5)
@@ -122,6 +126,31 @@ async function pruneAbsorbedInteractions(db: Db): Promise<void> {
   }
 }
 
+/** Soft-deleted follow rows have no engagement row to absorb into (their
+ * subject is a photographer DID, not a post), so {@link pruneAbsorbedInteractions}'s
+ * inner join never reaches them — without this they accumulate forever. */
+const FOLLOW_PRUNE_AGE_MS = 24 * 60 * 60 * 1000;
+/** OAuth authorize round-trips complete in minutes; anything older is an
+ * abandoned flow. */
+const OAUTH_STATE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Housekeeping the sweep is well-placed to own (it already runs periodically
+ * with a DB handle): prune stale soft-deleted follow rows and TTL-expire
+ * abandoned oauth_states. (`oauth_sessions` cleanup on sign-out lives in the
+ * web app's signOut action — it needs the session context.)
+ */
+async function janitor(db: Db): Promise<void> {
+  await db.delete(interactions).where(and(
+    eq(interactions.kind, "follow"),
+    isNotNull(interactions.deletedAt),
+    lt(interactions.deletedAt, sql`now() - ${sql.raw(String(FOLLOW_PRUNE_AGE_MS))} * interval '1 millisecond'`),
+  ));
+  await db.delete(oauthStates).where(
+    lt(oauthStates.createdAt, sql`now() - ${sql.raw(String(OAUTH_STATE_TTL_MS))} * interval '1 millisecond'`),
+  );
+}
+
 /**
  * The actual sweep tick. Exported (alongside the two documented entry points)
  * so both `runEngagementSweep` (one-shot, `Promise<void>` per spec) and
@@ -138,6 +167,7 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
   let replyRequests = 0;
   let followerRequests = 0;
   let aborted = false;
+  let rateLimited = false;
 
   // The WHOLE tick is inside the try — scope query, prev-rows read, the fan-out
   // loops, AND the prune — so any failure (a 429 mid-loop, a transient DB blip
@@ -221,9 +251,11 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
     }
 
     await pruneAbsorbedInteractions(db);
+    await janitor(db);
   } catch (err) {
     aborted = true;
     if (isRateLimited(err)) {
+      rateLimited = true;
       console.error("engagement_sweep: rate limited, aborting tick (rows already upserted this tick are kept)", String(err));
     } else {
       console.error("engagement_sweep: tick failed, aborting", err);
@@ -234,7 +266,7 @@ export async function sweepOnce(db: Db, appview: EngagementAppView, opts: Engage
   const intervalMs = governedIntervalMs(requestsPerSweep);
   console.log(`engagement_sweep interval_ms=${intervalMs} requests=${requestsPerSweep}`);
 
-  return { requestsPerSweep, intervalMs, aborted };
+  return { requestsPerSweep, intervalMs, aborted, rateLimited };
 }
 
 /** One-shot sweep tick. Errors (incl. 429s) are caught internally — the tick
@@ -249,10 +281,16 @@ export async function runEngagementSweep(db: Db, appview: EngagementAppView, opt
  * interval — computed from that tick's own request count — applies to the
  * NEXT delay, per the scale governor (spec §5).
  */
+/** Doubles per consecutive rate-limited sweep, capped here — a sustained 429
+ * storm reaches 8× the governed interval (~24min at base), then resets to 1×
+ * on the first clean sweep. */
+const MAX_RATE_LIMIT_BACKOFF = 8;
+
 export function startEngagementSweep(db: Db, appview: EngagementAppView, opts: EngagementSweepOpts = {}): { stop(): void } {
   let stopped = false;
   let sweepIndex = opts.sweepIndex ?? 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let backoffMultiplier = 1;
 
   const scheduleNext = (delayMs: number) => {
     if (stopped) return;
@@ -263,7 +301,13 @@ export function startEngagementSweep(db: Db, appview: EngagementAppView, opts: E
     void sweepOnce(db, appview, { ...opts, sweepIndex })
       .then((result) => {
         sweepIndex++;
-        scheduleNext(result.intervalMs);
+        if (result.rateLimited) {
+          backoffMultiplier = Math.min(backoffMultiplier * 2, MAX_RATE_LIMIT_BACKOFF);
+          console.log(`engagement_sweep rate_limit_backoff=${backoffMultiplier}x`);
+        } else {
+          backoffMultiplier = 1;
+        }
+        scheduleNext(result.intervalMs * backoffMultiplier);
       })
       .catch((err) => {
         // sweepOnce already swallows its own errors — this is a

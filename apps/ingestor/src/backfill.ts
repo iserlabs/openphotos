@@ -41,6 +41,12 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
       catch (e) { if (a >= attempts) throw e; await sleep(opts.retryDelayMs ?? 1000 * 2 ** a); }
     }
     for (const collection of collections) {
+      // Purge-race guard: a deregistration (whose purge deletes this DID's
+      // rows) can land while this walk is mid-flight — without this check the
+      // walk would resurrect the purged rows. Re-read status per collection;
+      // abort silently on deregistration (the purge is the newer intent).
+      const [cur] = await db.select({ status: photographers.status }).from(photographers).where(eq(photographers.did, did));
+      if (!cur || cur.status === "deregistered") return;
       let cursor: string | undefined; let count = 0;
       const seen = new Set<string>();
       do {

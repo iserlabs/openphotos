@@ -484,3 +484,51 @@ describe("startEngagementSweep", () => {
     stopper.stop();
   });
 });
+
+describe("429 backoff + janitor (fast-follows)", () => {
+  it("flags rateLimited on a 429 abort, not on other failures", async () => {
+    const db = await createTestDb();
+    await seedPhotographer(db, KEVIN, "kevin.photos");
+    await seedBskyPhoto(db, `at://${KEVIN}/app.bsky.feed.post/1`, KEVIN);
+
+    const limited = await sweepOnce(db, makeStubAppView({
+      getPosts: async () => { throw new Error("fetch https://x: 429"); },
+    }).appview);
+    expect(limited.aborted).toBe(true);
+    expect(limited.rateLimited).toBe(true);
+
+    const other = await sweepOnce(db, makeStubAppView({
+      getPosts: async () => { throw new Error("boom"); },
+    }).appview);
+    expect(other.aborted).toBe(true);
+    expect(other.rateLimited).toBe(false);
+  });
+
+  it("janitor prunes old soft-deleted follow rows and stale oauth states, keeps fresh ones", async () => {
+    const db = await createTestDb();
+    const { oauthStates } = await import("@luminance/db");
+    const dayAndBitAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    const recent = new Date(Date.now() - 60 * 1000);
+
+    await db.insert(interactions).values([
+      { recordUri: "at://did:plc:v/app.bsky.graph.follow/old", actorDid: "did:plc:v", kind: "follow", subjectUri: KEVIN, createdAt: dayAndBitAgo, deletedAt: dayAndBitAgo },
+      { recordUri: "at://did:plc:v/app.bsky.graph.follow/fresh", actorDid: "did:plc:v", kind: "follow", subjectUri: KEVIN, createdAt: recent, deletedAt: recent },
+      { recordUri: "at://did:plc:v/app.bsky.graph.follow/live", actorDid: "did:plc:v", kind: "follow", subjectUri: KEVIN, createdAt: dayAndBitAgo },
+    ]);
+    await db.insert(oauthStates).values([
+      { key: "stale", state: {}, createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      { key: "inflight", state: {}, createdAt: recent },
+    ]);
+
+    await sweepOnce(db, makeStubAppView().appview); // empty scope; janitor still runs
+
+    const follows = await db.select().from(interactions);
+    const uris = follows.map((f) => f.recordUri).sort();
+    expect(uris).toEqual([
+      "at://did:plc:v/app.bsky.graph.follow/fresh", // inside the 24h window — kept
+      "at://did:plc:v/app.bsky.graph.follow/live", // not deleted — kept
+    ]);
+    const states = await db.select().from(oauthStates);
+    expect(states.map((s) => s.key)).toEqual(["inflight"]);
+  });
+});

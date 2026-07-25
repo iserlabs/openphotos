@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createTestDb, photos, photographers, tombstones, seriesPhotos } from "@luminance/db";
 import { LUMINANCE_PHOTO, BSKY_POST } from "@luminance/lexicons";
 import { Indexer } from "./indexer.js";
@@ -208,5 +208,19 @@ describe("periodic reconciliation", () => {
     // re-arm never happened is an untouched 'complete' with zero transitions.
     expect(p.backfillStatus).not.toBe("complete");
     void counting; void walked; void origResolve;
+  });
+});
+
+describe("purge-vs-inflight-backfill race", () => {
+  it("aborts the walk without fetching when the photographer deregistered mid-flight", async () => {
+    const db = await createTestDb();
+    const { photographers, photos } = await import("@luminance/db");
+    // Deregistered BEFORE the walk reaches its first collection — simulates
+    // the purge landing between the loop's pending-query and the walk.
+    await db.insert(photographers).values({ did: DID, handle: "kevin.photos", status: "deregistered", backfillStatus: "pending" });
+    const fetchJson = vi.fn(async () => ({ records: [] }));
+    await runBackfill(db, new Indexer(db), DID, { fetchJson, resolvePds: async () => "https://pds.test" });
+    expect(fetchJson).not.toHaveBeenCalled(); // no listRecords — nothing to resurrect purged rows with
+    expect(await db.select().from(photos)).toHaveLength(0);
   });
 });

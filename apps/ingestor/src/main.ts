@@ -38,25 +38,46 @@ async function onStaleCursor(db: Db): Promise<void> {
 
 /**
  * Reads the live-consumer cursor row and reports how far behind "now" it is.
- * Always logs an info-level `cursor_lag_seconds=<n>` line; logs an error
- * (and alerts Sentry, if enabled) once the lag crosses the alert threshold —
- * a sign the Jetstream connection has stalled or is falling behind.
+ * Always logs an info-level `cursor_lag_seconds=<n>` line.
+ *
+ * False-positive gating (fast-follow): with a quiet single-DID filter, zero
+ * events means the lag grows at wall-clock rate though nothing is wrong. Two
+ * signals distinguish real trouble from quiet:
+ *  - `connectionHealthy()` (ws ping/pong): a dead/stalled socket alerts.
+ *  - `lastRevChangeAt()` (freshness probe, PDS truth): repo activity newer
+ *    than the cursor while the socket looks healthy = upstream starvation
+ *    (the documented Jetstream incident) — also alerts.
+ * Healthy socket + no observed repo activity = quiet filter; log only.
  */
-async function checkCursorLag(db: Db): Promise<void> {
+async function checkCursorLag(
+  db: Db,
+  signals: { connectionHealthy(): boolean; lastRevChangeAt(): number | null },
+): Promise<void> {
   const [row] = await db.select().from(ingestCursors).where(eq(ingestCursors.connectionId, CURSOR_LAG_CONNECTION_ID));
   if (!row) return; // no events consumed yet
   const lagSeconds = cursorLagSeconds(row.timeUs, Date.now());
   console.log(`cursor_lag_seconds=${lagSeconds}`);
-  if (lagSeconds > CURSOR_LAG_ALERT_THRESHOLD_S) {
-    const msg = `ingestor: cursor lag ${lagSeconds}s exceeds ${CURSOR_LAG_ALERT_THRESHOLD_S}s threshold`;
+  if (lagSeconds <= CURSOR_LAG_ALERT_THRESHOLD_S) return;
+
+  const cursorMs = Number(row.timeUs / 1000n);
+  const revChange = signals.lastRevChangeAt();
+  const starving = revChange !== null && revChange > cursorMs;
+  if (!signals.connectionHealthy() || starving) {
+    const cause = starving ? "repo activity newer than cursor (upstream starvation)" : "socket unhealthy";
+    const msg = `ingestor: cursor lag ${lagSeconds}s exceeds ${CURSOR_LAG_ALERT_THRESHOLD_S}s — ${cause}`;
     console.error(msg);
     if (sentryEnabled) Sentry.captureMessage(msg, "error");
+  } else {
+    console.log(`cursor_lag_quiet_filter=1 lag_s=${lagSeconds}`); // quiet filter, not a stall
   }
 }
 
-function startCursorLagMonitor(db: Db): ReturnType<typeof setInterval> {
+function startCursorLagMonitor(
+  db: Db,
+  signals: { connectionHealthy(): boolean; lastRevChangeAt(): number | null },
+): ReturnType<typeof setInterval> {
   return setInterval(() => {
-    void checkCursorLag(db).catch((err) => console.error("cursor-lag: check failed", err));
+    void checkCursorLag(db, signals).catch((err) => console.error("cursor-lag: check failed", err));
   }, CURSOR_LAG_CHECK_INTERVAL_MS);
 }
 
@@ -79,10 +100,36 @@ async function startBackgroundJobs(db: Db, indexer: Indexer): Promise<void> {
   });
 
   startHealthServer(indexer.stats, config.HEALTH_PORT);
-  const backfillTimer = startBackfillLoop(db, indexer); // graceful shutdown will clear this
-  const cursorLagTimer = startCursorLagMonitor(db); // graceful shutdown will clear this
   const freshnessProbe = createFreshnessProbe(db); freshnessProbe.start(); // asks each PDS for its repo rev — automatic freshness while Jetstream starves this PDS
-  const engagementSweep = startEngagementSweep(db, new AppView()); // graceful shutdown will clear this
+  const backfillTimer = startBackfillLoop(db, indexer);
+  const cursorLagTimer = startCursorLagMonitor(db, {
+    connectionHealthy: () => consumer.connectionHealthy(),
+    lastRevChangeAt: () => freshnessProbe.lastRevChangeAt(),
+  });
+  const engagementSweep = startEngagementSweep(db, new AppView());
+
+  // Graceful shutdown (SIGTERM = Fly deploys/restarts; SIGINT = local ctrl-C):
+  // stop timers first so nothing re-arms, then drain the consumer's in-flight
+  // event queue via stop() so the cursor lands consistently, then exit. A
+  // second signal (or a 10s drain hang) force-exits.
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) { console.error("ingestor: forced exit"); process.exit(1); }
+    shuttingDown = true;
+    console.log(`ingestor: ${signal} received, shutting down`);
+    clearInterval(backfillTimer);
+    clearInterval(cursorLagTimer);
+    freshnessProbe.stop();
+    engagementSweep.stop();
+    const forceTimer = setTimeout(() => { console.error("ingestor: drain timed out, forcing exit"); process.exit(1); }, 10_000);
+    void consumer.stop().then(() => {
+      clearTimeout(forceTimer);
+      process.exit(0);
+    });
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
   await consumer.start();
 }
 
