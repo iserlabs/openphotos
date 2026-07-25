@@ -36,6 +36,13 @@
       "when": 1784963183502,
       "tag": "0004_blur_data_url",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784991763330,
+      "tag": "0005_admin_audit",
+      "breakpoints": true
     }
   ]
 }

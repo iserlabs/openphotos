@@ -40,6 +40,18 @@ export const oauthSessions = pgTable("oauth_sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Durable trail of privileged actions (who did what to what), written by every
+// admin-gated server action. Required BEFORE multi-admin: with a second admin,
+// accountability must already exist, not be retrofitted.
+export const adminAudit = pgTable("admin_audit", {
+  id: serial("id").primaryKey(),
+  actorDid: text("actor_did").notNull(),
+  action: text("action").notNull(),
+  target: text("target").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const ingestCursors = pgTable("ingest_cursors", {
   connectionId: text("connection_id").primaryKey(),
   timeUs: bigint("time_us", { mode: "bigint" }).notNull(),

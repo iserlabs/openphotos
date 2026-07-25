@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { photographers } from "@luminance/db";
+import { adminAudit, photographers } from "@luminance/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { requestRefresh } from "@/lib/refresh";
@@ -77,7 +77,16 @@ export async function adminTakedown(formData: FormData) {
   const reason = String(formData.get("reason") ?? "").trim();
   if (!atUri || !Number.isInteger(mediaIndex)) redirect("/settings");
 
-  await adminTakedownRow(getDb(), atUri, mediaIndex, reason);
+  const db = getDb();
+  await adminTakedownRow(db, atUri, mediaIndex, reason);
+  // Audit trail (required before multi-admin): who took what down, and why.
+  // session.did is non-null here — isAdmin implies an authenticated session.
+  await db.insert(adminAudit).values({
+    actorDid: session.did!,
+    action: "takedown",
+    target: `${atUri}#${mediaIndex}`,
+    reason: reason || null,
+  });
   revalidatePath("/settings");
 }
 
