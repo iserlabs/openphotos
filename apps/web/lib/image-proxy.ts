@@ -34,7 +34,7 @@ export async function proxyImage(
   // photos. 404 before any upstream fetch if neither matches.
   const LIVE_STATUSES = notInArray(photographers.status, ["deregistered", "takedown"]);
   const [photoHit] = await db
-    .select({ cid: photos.blobCid })
+    .select({ cid: photos.blobCid, hasBlur: sql<boolean>`${photos.blurDataUrl} is not null` })
     .from(photos)
     .innerJoin(photographers, eq(photos.did, photographers.did))
     .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
@@ -63,9 +63,24 @@ export async function proxyImage(
     const wantsWebp = req.accept.includes("image/webp");
     let pipe = sharp(buf).rotate().resize({ width, withoutEnlargement: true });
     pipe = wantsAvif ? pipe.avif({ quality: 70 }) : wantsWebp ? pipe.webp({ quality: 82 }) : pipe.jpeg({ quality: 85 });
+    const body = await pipe.toBuffer();
+    // Blur-up placeholder: the blob is decoded right here anyway, so the first
+    // successful serve of a photo also emits a ~16px webp data URI and stores
+    // it on every row referencing this blob. The ingestor's post-index cache
+    // warming makes this run seconds after indexing, before human traffic.
+    // Best-effort — a placeholder failure must never fail a good image.
+    if (photoHit && !photoHit.hasBlur) {
+      try {
+        const tiny = await sharp(buf).rotate().resize({ width: 16, withoutEnlargement: true }).webp({ quality: 40 }).toBuffer();
+        await db
+          .update(photos)
+          .set({ blurDataUrl: `data:image/webp;base64,${tiny.toString("base64")}` })
+          .where(and(eq(photos.did, req.did), eq(photos.blobCid, req.cid), sql`${photos.blurDataUrl} is null`));
+      } catch {}
+    }
     return {
       status: 200,
-      body: await pipe.toBuffer(),
+      body,
       contentType: wantsAvif ? "image/avif" : wantsWebp ? "image/webp" : "image/jpeg",
       cacheControl: "public, max-age=31536000, immutable",
     };

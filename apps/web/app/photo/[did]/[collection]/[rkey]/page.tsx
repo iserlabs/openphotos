@@ -179,7 +179,14 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
             <figure key={photo.mediaIndex} id={`i${photo.mediaIndex}`} className="scroll-mt-6">
               <SensitiveImage sensitive={isSensitive(photo.labels)}>
                 <div
-                  style={{ aspectRatio: `${photo.width ?? 3}/${photo.height ?? 2}` }}
+                  style={{
+                    aspectRatio: `${photo.width ?? 3}/${photo.height ?? 2}`,
+                    // Blur-up placeholder behind the full rendition (the box's
+                    // aspect matches the photo, so cover ≈ contain here).
+                    ...(photo.blurDataUrl
+                      ? { backgroundImage: `url("${photo.blurDataUrl}")`, backgroundSize: "cover" }
+                      : {}),
+                  }}
                   className="overflow-hidden rounded-md bg-zinc-900"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}

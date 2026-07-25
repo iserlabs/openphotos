@@ -56,6 +56,7 @@ export function PhotoCard({
   replyCount,
   srcSet,
   sizes,
+  blurDataUrl,
 }: {
   href: string;
   src: string;
@@ -76,11 +77,23 @@ export function PhotoCard({
   /** Responsive renditions — browsers pick the smallest sufficient file. */
   srcSet?: string;
   sizes?: string;
+  /** ~16px webp data URI painted behind the img until the rendition decodes. */
+  blurDataUrl?: string | null;
 }) {
   const [revealed, setRevealed] = useState(false);
 
   const image = (
-    <div style={{ aspectRatio: `${width ?? 3}/${height ?? 2}` }}>
+    <div
+      style={{
+        aspectRatio: `${width ?? 3}/${height ?? 2}`,
+        // Blur-up: the tiny placeholder paints instantly as a background; the
+        // real <img> covers it the moment it decodes. Browser upscaling of a
+        // 16px source reads as a blur — no CSS filter needed.
+        ...(blurDataUrl
+          ? { backgroundImage: `url("${blurDataUrl}")`, backgroundSize: "cover" }
+          : {}),
+      }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

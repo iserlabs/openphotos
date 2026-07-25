@@ -15,6 +15,7 @@ export interface GridPhoto {
   width: number | null;
   height: number | null;
   labels: string[];
+  blurDataUrl: string | null;
 }
 
 /**
@@ -56,6 +57,7 @@ export function PhotoGrid({
             height={p.height}
             sensitive={isSensitive(p.labels)}
             priority={i === 0}
+            blurDataUrl={p.blurDataUrl}
             likeCount={c?.likeCount}
             replyCount={c?.replyCount}
           />

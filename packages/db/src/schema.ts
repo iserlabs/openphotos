@@ -70,6 +70,11 @@ export const photos = pgTable("photos", {
   license: text("license"),
   labels: text("labels").array().notNull().default([]),
   groupKey: text("group_key"),
+  // Tiny (~16px) base64 webp data URI, painted as a CSS background while the
+  // real rendition loads. Populated lazily by the web image proxy on the first
+  // successful decode of the blob (see apps/web/lib/image-proxy.ts) — the
+  // ingestor's post-index cache warming triggers that within seconds.
+  blurDataUrl: text("blur_data_url"),
   indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   primaryKey({ columns: [t.atUri, t.mediaIndex] }),
