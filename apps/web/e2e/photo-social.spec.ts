@@ -36,6 +36,8 @@ test("signed-out photo page invites sign-in to comment, linking to /login", asyn
 
   // A fresh Playwright context carries no session cookie -> signed-out branch.
   await expect(page.getByText("Sign in to comment", { exact: false })).toBeVisible();
-  const signIn = page.getByRole("link", { name: "Sign in", exact: true });
+  // Scoped to main: the site header carries its own "Sign in" link, and an
+  // unscoped role query is a strict-mode violation with both present.
+  const signIn = page.getByRole("main").getByRole("link", { name: "Sign in", exact: true });
   await expect(signIn).toHaveAttribute("href", /^\/login/);
 });

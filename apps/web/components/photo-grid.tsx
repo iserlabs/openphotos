@@ -39,7 +39,11 @@ export function PhotoGrid({
   counts?: Map<string, { likeCount: number; replyCount: number }>;
 }) {
   return (
-    <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
+    // `block` (not `columns-1`) below sm: a one-column multicol still creates
+    // a CSS fragmentation context, and Chrome's LCP paint attribution inside
+    // it lagged the actual pixels by ~4s on throttled mobile (Lighthouse
+    // 80-vs-89 variance). Plain flow renders identically for one column.
+    <div className="block gap-4 sm:columns-2 lg:columns-3">
       {items.map((p, i) => {
         const parts = splitAtUri(p.atUri);
         if (!parts) return null;

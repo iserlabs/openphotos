@@ -1,0 +1,35 @@
+name: nightly
+# Nightly (and on-demand) checks that don't belong in the per-push merge gate:
+#  - the dev-env integration suite (spins a real SQLite-native PDS — slow)
+#  - the Playwright E2E suite against PRODUCTION (live-data smoke: feed render,
+#    photo-page params regression, image-proxy headers)
+on:
+  schedule:
+    - cron: "0 9 * * *" # 09:00 UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter web test:integration
+
+  e2e-production:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - run: pnpm --filter web test:e2e
+        env:
+          E2E_BASE_URL: https://luminance.social
+          CI: "true"
