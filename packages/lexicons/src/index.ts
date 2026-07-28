@@ -11,6 +11,8 @@ export const LUMINANCE_PROFILE = "social.luminance.actor.profile";
 export const BSKY_POST = "app.bsky.feed.post";
 export const BSKY_PROFILE = "app.bsky.actor.profile";
 export const GRAIN_PREFIX = "social.grain.";
+export const OPENCONTENT_PHOTOGRAPH = "social.opencontent.photograph";
+export const OPENCONTENT_COLLECTION = "social.opencontent.collection";
 
 export const lexicons = [photo, series, profile, strongRef, labelDefs] as LexiconDoc[];
 

@@ -2,14 +2,20 @@ import { and, eq, inArray, like, ne, notInArray } from "drizzle-orm";
 import { photographers, photos, series, seriesPhotos, tombstones, type Db } from "@luminance/db";
 import {
   resolvePdsEndpoint as realResolve, safeJsonFetch, mapLuminancePhoto, mapBskyPost,
-  mapGrainRecord, GRAIN_COLLECTIONS, type Ctx,
+  mapGrainRecord, GRAIN_COLLECTIONS, mapOpencontentPhotograph, type Ctx,
 } from "@luminance/atproto";
-import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
+import {
+  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
+  OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
+} from "@luminance/lexicons";
 import type { Indexer } from "./indexer.js";
 import { warmNewPhotos } from "./warm-cache.js";
 
 const MAX_PER_COLLECTION = 5000; // spec §9
-const WATCHED = [LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS];
+const WATCHED = [
+  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS,
+  OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
+];
 
 export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
   fetchJson?: (url: string) => Promise<unknown>; resolvePds?: (did: string) => Promise<string>;
@@ -84,10 +90,11 @@ export async function runBackfill(db: Db, indexer: Indexer, did: string, opts: {
   }
 }
 
-const PHOTO_SOURCE_BY_COLLECTION: Record<string, "luminance" | "bsky" | "grain"> = {
+const PHOTO_SOURCE_BY_COLLECTION: Record<string, "luminance" | "bsky" | "grain" | "opencontent"> = {
   [LUMINANCE_PHOTO]: "luminance",
   [BSKY_POST]: "bsky",
   "social.grain.photo": "grain",
+  [OPENCONTENT_PHOTOGRAPH]: "opencontent",
 };
 
 async function reconcileCollection(db: Db, did: string, collection: string, seen: Set<string>) {
@@ -100,7 +107,7 @@ async function reconcileCollection(db: Db, did: string, collection: string, seen
     await db.delete(photos).where(where);
     return;
   }
-  if (collection === LUMINANCE_SERIES || collection === "social.grain.gallery") {
+  if (collection === LUMINANCE_SERIES || collection === "social.grain.gallery" || collection === OPENCONTENT_COLLECTION) {
     const pattern = `at://${did}/${collection}/%`;
     const where = uris.length
       ? and(eq(series.did, did), like(series.atUri, pattern), notInArray(series.atUri, uris))
@@ -130,6 +137,9 @@ async function applyOne(indexer: Indexer, ctx: Ctx, record: any) {
   const { collection } = ctx;
   if (collection === LUMINANCE_PHOTO) {
     const m = mapLuminancePhoto(ctx, record);
+    if (m) await indexer.applyPhotoRows([m], { respectTombstones: true });
+  } else if (collection === OPENCONTENT_PHOTOGRAPH) {
+    const m = mapOpencontentPhotograph(ctx, record);
     if (m) await indexer.applyPhotoRows([m], { respectTombstones: true });
   } else if (collection === BSKY_POST) {
     await indexer.applyPhotoRows(mapBskyPost(ctx, record), { respectTombstones: true });

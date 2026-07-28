@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { createTestDb, photos, photographers, tombstones, seriesPhotos } from "@luminance/db";
-import { LUMINANCE_PHOTO, BSKY_POST } from "@luminance/lexicons";
+import { createTestDb, photos, photographers, tombstones, seriesPhotos, series } from "@luminance/db";
+import { LUMINANCE_PHOTO, BSKY_POST, OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@luminance/lexicons";
 import { Indexer } from "./indexer.js";
 import { runBackfill, startBackfillLoop } from "./backfill.js";
 
@@ -25,6 +25,24 @@ const fetchJson = async (url: string) => {
   return { records: [] };
 };
 const resolvePds = async () => "https://pds.example.com";
+const ocPhotoRec = (rkey: string) => ({
+  uri: `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/${rkey}`, cid: `bafyoc-${rkey}`,
+  value: {
+    $type: OPENCONTENT_PHOTOGRAPH,
+    image: { $type: "blob", ref: { $link: `bafk-oc-${rkey}` }, mimeType: "image/jpeg", size: 1 },
+    aspectRatio: { width: 1200, height: 800 },
+    createdAt: "2026-07-01T00:00:00Z",
+  },
+});
+const ocCollectionRec = (rkey: string, itemUris: string[] = []) => ({
+  uri: `at://${DID}/${OPENCONTENT_COLLECTION}/${rkey}`, cid: `bafyoccoll-${rkey}`,
+  value: {
+    $type: OPENCONTENT_COLLECTION,
+    title: "A Collection",
+    items: itemUris.map((uri) => ({ uri, cid: "bafyitem" })),
+    createdAt: "2026-07-01T00:00:00Z",
+  },
+});
 
 describe("runBackfill", () => {
   it("indexes repo history and marks complete", async () => {
@@ -187,6 +205,57 @@ describe("reconciliation (PDS truth diff)", () => {
     await runBackfill(db, new Indexer(db), DID, { fetchJson: withItems, resolvePds });
     const rows = await db.select().from(seriesPhotos);
     expect(rows.map((r) => r.itemUri)).toEqual([keepItem]);
+  });
+});
+
+describe("opencontent reconciliation walk (watched collections)", () => {
+  it("indexes social.opencontent.photograph and reconciles away rows whose records vanished upstream", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
+    // op1 still in the repo; op3 was deleted upstream and its delete event was
+    // never delivered by the firehose — same shape as the LUMINANCE_PHOTO case.
+    await db.insert(photos).values([
+      { atUri: ocPhotoRec("op1").uri, mediaIndex: 0, did: DID, source: "opencontent", recordCid: "r", blobCid: "stale-op1", sortAt: new Date() },
+      { atUri: `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/op3`, mediaIndex: 0, did: DID, source: "opencontent", recordCid: "r", blobCid: "stale-op3", sortAt: new Date() },
+    ]);
+    const fetchJsonOc = async (url: string) => {
+      const u = new URL(url);
+      if (u.searchParams.get("collection") === OPENCONTENT_PHOTOGRAPH && !u.searchParams.get("cursor")) {
+        return { records: [ocPhotoRec("op1")], cursor: undefined };
+      }
+      return { records: [] };
+    };
+    await runBackfill(db, new Indexer(db), DID, { fetchJson: fetchJsonOc, resolvePds });
+    const rows = (await db.select().from(photos)).filter((r) => r.source === "opencontent");
+    expect(rows.map((r) => r.atUri)).toEqual([ocPhotoRec("op1").uri]); // op3 reconciled away
+  });
+
+  it("indexes social.opencontent.collection and reconciles away series (+ seriesPhotos) whose records vanished upstream", async () => {
+    const db = await createTestDb();
+    await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
+    const keepSeries = `at://${DID}/${OPENCONTENT_COLLECTION}/keep`;
+    const staleSeries = `at://${DID}/${OPENCONTENT_COLLECTION}/stale`;
+    // Pre-seed both series as if a prior backfill/live event had indexed them;
+    // only "keep" still exists in the repo per the walk below.
+    await db.insert(series).values([
+      { atUri: keepSeries, did: DID, title: "Keep" },
+      { atUri: staleSeries, did: DID, title: "Stale" },
+    ]);
+    await db.insert(seriesPhotos).values([
+      { seriesUri: staleSeries, photoUri: `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/x`, position: 0 },
+    ]);
+    const fetchJsonOc = async (url: string) => {
+      const u = new URL(url);
+      if (u.searchParams.get("collection") === OPENCONTENT_COLLECTION && !u.searchParams.get("cursor")) {
+        return { records: [ocCollectionRec("keep")], cursor: undefined };
+      }
+      return { records: [] };
+    };
+    await runBackfill(db, new Indexer(db), DID, { fetchJson: fetchJsonOc, resolvePds });
+    const remainingSeries = await db.select().from(series);
+    expect(remainingSeries.map((s) => s.atUri)).toEqual([keepSeries]); // stale series deleted
+    const remainingSeriesPhotos = await db.select().from(seriesPhotos);
+    expect(remainingSeriesPhotos.some((sp) => sp.seriesUri === staleSeries)).toBe(false); // transaction cleaned seriesPhotos too
   });
 });
 

@@ -2,9 +2,13 @@ import { eq, inArray, or, sql } from "drizzle-orm";
 import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@luminance/db";
 import {
   mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile,
-  mapGrainRecord, GRAIN_COLLECTIONS, type Ctx, type MappedPhoto, type MappedSeries,
+  mapGrainRecord, GRAIN_COLLECTIONS, mapOpencontentPhotograph, mapOpencontentCollection,
+  type Ctx, type MappedPhoto, type MappedSeries,
 } from "@luminance/atproto";
-import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
+import {
+  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
+  OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
+} from "@luminance/lexicons";
 
 export interface JetstreamEvent {
   did: string; time_us: number; kind: "commit" | "identity" | "account";
@@ -95,6 +99,16 @@ export class Indexer {
           target: [seriesPhotos.seriesUri, seriesPhotos.photoUri],
           set: { position: m.seriesItem.position, itemUri: m.seriesItem.itemUri },
         });
+      } else if (c.collection === OPENCONTENT_PHOTOGRAPH) {
+        // no includeOpencontent toggle: the portfolio vocabulary is the point,
+        // not an optional supplementary source (spec §6)
+        const m = mapOpencontentPhotograph(ctx, c.record);
+        if (!m) return void this.stats.skipped++;
+        await this.applyPhotoRows([m]);
+      } else if (c.collection === OPENCONTENT_COLLECTION) {
+        const m = mapOpencontentCollection(ctx, c.record);
+        if (!m) return void this.stats.skipped++;
+        await this.applySeries(m);
       }
     } catch (err) {
       this.stats.skipped++; // poison event costs one photo, never the stream (spec §12)

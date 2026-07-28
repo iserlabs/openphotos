@@ -1,7 +1,10 @@
 import { Sentry, sentryEnabled } from "./sentry.js"; // must be imported first: initializes Sentry before other modules load
 import { ne, eq } from "drizzle-orm";
 import { createDb, photographers, ingestCursors, type Db } from "@luminance/db";
-import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
+import {
+  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
+  OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
+} from "@luminance/lexicons";
 import { GRAIN_COLLECTIONS, AppView } from "@luminance/atproto";
 import { config } from "./config.js";
 import { Indexer } from "./indexer.js";
@@ -18,6 +21,7 @@ const CURSOR_LAG_ALERT_THRESHOLD_S = 300;
 
 const WANTED_COLLECTIONS = [
   LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS,
+  OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
 ];
 
 // Live socket + registry poll only care about photographers still opted in;
