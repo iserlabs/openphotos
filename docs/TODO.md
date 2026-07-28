@@ -46,6 +46,7 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] DID-based permanent fallback profile route (2026-07-25) — `/did:plc:…` redirects to the current handle's profile
 - [x] Backfill status + manual retry visible in `/settings` (2026-07-25) — failed-refresh callout + retry button
 - [x] Admin audit log (2026-07-25) — `admin_audit` table (migration 0005), written by the takedown action
+- [ ] CI: gate the db-migrate step to push events only (surfaced by the 3a final review — it currently also runs on pull_request against the prod DATABASE_URL; benign for additive migrations, a sharp edge for any future destructive one)
 - [x] Run `test:integration` in CI (2026-07-25) — nightly workflow (with workflow_dispatch), alongside the prod E2E job
 - [x] Assorted minors (2026-07-25): profile load-more (cursor pagination), React.cache dedup for photo+profile metadata queries, purge-vs-inflight-backfill race guard (per-collection status re-check), series cover fallback to first item (Grain galleries)
 
