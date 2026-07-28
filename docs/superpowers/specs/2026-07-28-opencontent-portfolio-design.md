@@ -30,7 +30,7 @@ Two deliverables, one thesis:
 
 ## 3. The lexicons (v1 — deliberately two types)
 
-Authority for all: `opencontent.social` → **one** `_lexicon.opencontent.social` TXT → steward DID. Schema documents live as `com.atproto.lexicon.schema` records in the **steward account** `@opencontent.social`, hosted on the flagship PDS. Governance repo `iserlabs/opencontent-lexicons` is source of truth; publish via `goat` (pipeline proven for luminance's lexicons).
+Authority for all: `opencontent.social` → **one** `_lexicon.opencontent.social` TXT → steward DID. Schema documents live as `com.atproto.lexicon.schema` records in the **steward account** `@opencontent.social`, hosted on the flagship PDS; the steward's *handle* verifies via a `_atproto.opencontent.social` DNS TXT record (no website needs to exist on that domain for v1 — two TXT records are the entire footprint). Governance repo `iserlabs/opencontent-lexicons` is source of truth; publish via `goat` (pipeline proven for luminance's lexicons).
 
 ### `social.opencontent.photograph` — one record = one work (single image; a diptych is two photographs in a collection)
 
@@ -59,11 +59,11 @@ Authority for all: `opencontent.social` → **one** `_lexicon.opencontent.social
 | `cover` | strongRef | optional; renderers fall back to first resolvable item |
 | `createdAt` | datetime | required |
 
-**Consumer rules (documented in the lexicon repo):** tolerate dangling refs (deleted photograph referenced by a collection → skip, never error); unknown fields ignored (additive evolution).
+**Consumer rules (documented in the lexicon repo):** tolerate dangling refs (deleted photograph referenced by a collection → skip, never error); unknown fields ignored (additive evolution); collections absent from `site.collectionOrder` render **after** the ordered ones, newest first (unlisted ≠ hidden — hiding is deletion or a future explicit field, never an ordering side effect).
 
 ### `social.opencontent.site` (rkey `self`, one per repo)
 
-`title` (≤200), `about` (≤5000, optional), `collectionOrder` (at-uri strings, ≤100 — public-site nav order), `links` (≤10 of `{label ≤50, url}`), `theme` (≤64 freeform string; product-specific values allowed), `createdAt`.
+`title` (≤200), `about` (≤5000, optional), `collectionOrder` (**rkey strings**, ≤100 — public-site nav order; rkeys, not at-uris, because the record can only ever order collections in its own repo and embedding the repo's own DID in every entry is redundant), `links` (≤10 of `{label ≤50, url}`), `theme` (≤64 freeform string; product-specific values allowed), `createdAt`.
 
 **Rkeys:** TIDs for photographs/collections; `self` for site.
 
@@ -94,7 +94,7 @@ One Next.js 16 / React 19 / Tailwind 4 app. **No Postgres**: OAuth client state 
 3. **Recovery-key ceremony:** generate rotation keypair, register on the DID with priority over the PDS key, hand the private key to the owner (download + store-offline instructions). Docs state the honest guarantee: priority key = **72-hour window** to override a hostile op — time to notice and recover, not immunity.
 4. **Relay crawl request** so the account is live on Bluesky's network immediately.
 
-**Backups:** nightly cron in compose writes dated CAR + blob snapshot to a mounted backup dir; off-box sync documented as operator responsibility.
+**Backups:** the app schedules the nightly export itself (it's the always-on process — no fourth cron container): dated CAR + blob snapshot to a mounted backup dir; off-box sync documented as operator responsibility.
 
 **Migrate-away:** `goat`-based runbook to move the account to any other PDS — **executed once against a scratch PDS before release** (untested exit doors are decoration).
 
