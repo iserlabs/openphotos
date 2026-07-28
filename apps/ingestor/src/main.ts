@@ -2,7 +2,7 @@ import { Sentry, sentryEnabled } from "./sentry.js"; // must be imported first: 
 import { ne, eq } from "drizzle-orm";
 import { createDb, photographers, ingestCursors, type Db } from "@luminance/db";
 import {
-  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
+  LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
   OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
 } from "@luminance/lexicons";
 import { GRAIN_COLLECTIONS, AppView } from "@luminance/atproto";
@@ -19,8 +19,11 @@ const CURSOR_LAG_CONNECTION_ID = "main"; // matches JetstreamConsumer's connecti
 const CURSOR_LAG_CHECK_INTERVAL_MS = 60_000;
 const CURSOR_LAG_ALERT_THRESHOLD_S = 300;
 
+// social.luminance.portfolio.{photo,series} were retired 2026-07-28 (zero
+// records ever existed in the wild) and dropped from this list; LUMINANCE_PROFILE
+// (social.luminance.actor.profile) stays watched.
 const WANTED_COLLECTIONS = [
-  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS,
+  LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE, ...GRAIN_COLLECTIONS,
   OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
 ];
 

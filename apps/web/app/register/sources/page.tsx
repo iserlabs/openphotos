@@ -21,7 +21,7 @@ export default async function SourcesPage() {
         <span className="font-medium text-zinc-200">
           {session.handle ?? session.did}
         </span>
-        . Dedicated Luminance photo records are always included.
+        . Dedicated portfolio records (social.opencontent.photograph) are always included.
       </p>
 
       <form action={saveSources} className="mt-8 space-y-5">

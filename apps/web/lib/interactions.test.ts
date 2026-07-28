@@ -82,13 +82,18 @@ describe("routeInteraction", () => {
     const routed = routeInteraction({ source: "bsky", atUri: POST_URI, recordCid: POST_CID });
     expect(routed).toEqual({ supported: true, subject: { uri: POST_URI, cid: POST_CID } });
   });
-  it("luminance photo is not yet supported", () => {
-    expect(routeInteraction({ source: "luminance", atUri: POST_URI, recordCid: POST_CID })).toEqual({
+  it("opencontent photo is not yet supported (explicit phase-3b seam)", () => {
+    expect(routeInteraction({ source: "opencontent", atUri: POST_URI, recordCid: POST_CID })).toEqual({
       supported: false,
     });
   });
   it("grain photo is not yet supported", () => {
     expect(routeInteraction({ source: "grain", atUri: POST_URI, recordCid: POST_CID })).toEqual({
+      supported: false,
+    });
+  });
+  it("an unrecognized source falls through the generic fallback as unsupported", () => {
+    expect(routeInteraction({ source: "future-source", atUri: POST_URI, recordCid: POST_CID })).toEqual({
       supported: false,
     });
   });

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LUMINANCE_SERIES } from "@luminance/lexicons";
+import { OPENCONTENT_COLLECTION } from "@luminance/lexicons";
 import { GRAIN_GALLERY } from "@luminance/atproto";
 import { getDb } from "@/lib/db";
 import { getPhotographerByHandle, getSeries, buildAtUri } from "@/lib/queries";
@@ -11,10 +11,11 @@ import type { Db } from "@luminance/db";
 export const dynamic = "force-dynamic";
 
 // A series lives under one of two possible collections depending on which
-// lexicon it was authored with; try Luminance's own series record first,
-// then fall back to a Grain gallery.
+// lexicon it was authored with; try an opencontent collection first, then
+// fall back to a Grain gallery. (social.luminance.portfolio.series was
+// retired 2026-07-28 — zero records ever existed in the wild.)
 async function resolveSeries(db: Db, did: string, rkey: string) {
-  for (const collection of [LUMINANCE_SERIES, GRAIN_GALLERY]) {
+  for (const collection of [OPENCONTENT_COLLECTION, GRAIN_GALLERY]) {
     const found = await getSeries(db, buildAtUri(did, collection, rkey));
     if (found) return found;
   }

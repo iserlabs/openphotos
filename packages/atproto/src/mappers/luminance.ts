@@ -1,38 +1,17 @@
-import { atUri, blobCid, selfLabelVals, parseDate, type Ctx, type MappedPhoto, type MappedSeries, type MappedProfile } from "./types.js";
+import { blobCid, type MappedProfile } from "./types.js";
+
+// social.luminance.portfolio.{photo,series} were retired 2026-07-28 (zero
+// records ever existed in the wild — see docs/runbooks/publish-lexicons.md §7);
+// their mapLuminancePhoto/mapLuminanceSeries mappers were deleted along with
+// them. clampSortAt is a shared helper (still used by the bsky/grain/opencontent
+// mappers) and mapLuminanceProfile backs the still-active `social.luminance.actor.profile`
+// (LUMINANCE_PROFILE) — both survive here.
 
 const CLAMP_MS = 10 * 60 * 1000; // spec §8: 10 minutes
 export function clampSortAt(claimed: Date | null, indexedAt: Date): Date {
   if (!claimed) return indexedAt;
   const max = indexedAt.getTime() + CLAMP_MS;
   return claimed.getTime() > max ? new Date(max) : claimed;
-}
-
-export function mapLuminancePhoto(ctx: Ctx, record: any): MappedPhoto | null {
-  const cid = blobCid(record?.image);
-  if (!cid) return null;
-  const capturedAt = parseDate(record.capturedAt);
-  const createdAt = parseDate(record.createdAt);
-  return {
-    atUri: atUri(ctx), mediaIndex: 0, did: ctx.did, source: "luminance",
-    recordCid: ctx.cid, blobCid: cid,
-    width: record.aspectRatio?.width ?? null, height: record.aspectRatio?.height ?? null,
-    alt: record.alt ?? null, title: record.title ?? null, caption: record.caption ?? null,
-    capturedAt, createdAt, sortAt: clampSortAt(capturedAt ?? createdAt, ctx.indexedAt),
-    exif: record.exif ?? null, tags: record.tags ?? [], license: record.license ?? null,
-    labels: selfLabelVals(record.labels), groupKey: null,
-  };
-}
-
-export function mapLuminanceSeries(ctx: Ctx, record: any): MappedSeries | null {
-  if (!record?.title || !Array.isArray(record?.photos)) return null;
-  return {
-    atUri: atUri(ctx), did: ctx.did, title: record.title, description: record.description ?? null,
-    coverPhotoUri: record.coverPhoto?.uri ?? null, createdAt: parseDate(record.createdAt),
-    items: record.photos
-      .map((p: any, i: number) => ({ photoUri: p?.uri, position: i }))
-      .filter((p: { photoUri: unknown }) => typeof p.photoUri === "string" && p.photoUri.length > 0) as { photoUri: string; position: number }[],
-    itemsAuthoritative: true, // a Luminance series record's photos array IS the membership, even when empty
-  };
 }
 
 export function mapLuminanceProfile(did: string, record: any): MappedProfile {

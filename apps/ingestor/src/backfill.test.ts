@@ -1,13 +1,22 @@
 import { describe, it, expect, vi } from "vitest";
 import { createTestDb, photos, photographers, tombstones, seriesPhotos, series } from "@luminance/db";
-import { LUMINANCE_PHOTO, BSKY_POST, OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@luminance/lexicons";
+import { BSKY_POST, OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@luminance/lexicons";
 import { Indexer } from "./indexer.js";
 import { runBackfill, startBackfillLoop } from "./backfill.js";
 
 const DID = "did:plc:kevin";
+// Generic always-watched, no-toggle single-photo collection fixture — plays
+// the role social.luminance.portfolio.photo used to play before its 2026-07-28
+// retirement (zero records ever existed in the wild); social.opencontent.photograph
+// is its structural successor (always watched, no per-source toggle).
 const rec = (rkey: string) => ({
-  uri: `at://${DID}/social.luminance.portfolio.photo/${rkey}`, cid: "bafyrec",
-  value: { $type: "social.luminance.portfolio.photo", image: { $type: "blob", ref: { $link: `bafk-${rkey}` }, mimeType: "image/jpeg", size: 1 }, createdAt: "2026-07-01T00:00:00Z" },
+  uri: `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/${rkey}`, cid: "bafyrec",
+  value: {
+    $type: OPENCONTENT_PHOTOGRAPH,
+    image: { $type: "blob", ref: { $link: `bafk-${rkey}` }, mimeType: "image/jpeg", size: 1 },
+    aspectRatio: { width: 100, height: 100 },
+    createdAt: "2026-07-01T00:00:00Z",
+  },
 });
 const bskyRec = (rkey: string) => ({
   uri: `at://${DID}/app.bsky.feed.post/${rkey}`, cid: "bafybsky",
@@ -16,10 +25,10 @@ const bskyRec = (rkey: string) => ({
     embed: { $type: "app.bsky.embed.images", images: [{ image: { $type: "blob", ref: { $link: `bafk-${rkey}` }, mimeType: "image/jpeg", size: 1 }, alt: "" }] },
   },
 });
-// fake PDS: only the luminance photo collection has records
+// fake PDS: only the opencontent photograph collection has records
 const fetchJson = async (url: string) => {
   const u = new URL(url);
-  if (u.pathname.endsWith("/xrpc/com.atproto.repo.listRecords") && u.searchParams.get("collection") === "social.luminance.portfolio.photo" && !u.searchParams.get("cursor")) {
+  if (u.pathname.endsWith("/xrpc/com.atproto.repo.listRecords") && u.searchParams.get("collection") === OPENCONTENT_PHOTOGRAPH && !u.searchParams.get("cursor")) {
     return { records: [rec("p1"), rec("p2")], cursor: undefined };
   }
   return { records: [] };
@@ -82,10 +91,10 @@ describe("runBackfill", () => {
         const collection = u.searchParams.get("collection")!;
         seenCollections.push(collection);
         if (!u.searchParams.get("cursor")) {
-          // bsky records would be indexed here if the gate leaked; luminance
+          // bsky records would be indexed here if the gate leaked; opencontent
           // records prove other collections are still walked normally.
           if (collection === BSKY_POST) return { records: [bskyRec("b1")], cursor: undefined };
-          if (collection === LUMINANCE_PHOTO) return { records: [rec("p1")], cursor: undefined };
+          if (collection === OPENCONTENT_PHOTOGRAPH) return { records: [rec("p1")], cursor: undefined };
         }
       }
       return { records: [] };
@@ -93,11 +102,11 @@ describe("runBackfill", () => {
     await runBackfill(db, new Indexer(db), DID, { fetchJson: fetchJsonWithBsky, resolvePds });
 
     expect(seenCollections).not.toContain(BSKY_POST); // never requested from the PDS
-    expect(seenCollections).toContain(LUMINANCE_PHOTO); // other collections still walked
+    expect(seenCollections).toContain(OPENCONTENT_PHOTOGRAPH); // other collections still walked
 
     const rows = await db.select().from(photos);
     expect(rows).toHaveLength(1);
-    expect(rows[0].source).toBe("luminance"); // no bsky rows made it in
+    expect(rows[0].source).toBe("opencontent"); // no bsky rows made it in
   });
 
   it("the backfill loop skips a deregistered photographer even when marked pending", async () => {
@@ -128,8 +137,8 @@ describe("runBackfill", () => {
     ]);
 
     // Insert tombstones for both DIDs
-    const tombstoneA = `at://${DID_A}/social.luminance.portfolio.photo/tomb-a`;
-    const tombstoneB = `at://${DID_B}/social.luminance.portfolio.photo/tomb-b`;
+    const tombstoneA = `at://${DID_A}/${OPENCONTENT_PHOTOGRAPH}/tomb-a`;
+    const tombstoneB = `at://${DID_B}/${OPENCONTENT_PHOTOGRAPH}/tomb-b`;
     await db.insert(tombstones).values([
       { atUri: tombstoneA },
       { atUri: tombstoneB },
@@ -153,31 +162,41 @@ describe("runBackfill", () => {
 });
 
 describe("reconciliation (PDS truth diff)", () => {
+  // These two exercise the general reconcileCollection mechanism via the bsky
+  // source (distinct from the dedicated opencontent-focused block below, which
+  // covers the same mechanism for social.opencontent.*).
   it("removes indexed rows whose records no longer exist in the repo", async () => {
     const db = await createTestDb();
     await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
     // p1 still in repo; p3 was deleted upstream and its event was never delivered
     await db.insert(photos).values([
-      { atUri: rec("p1").uri, mediaIndex: 0, did: DID, source: "luminance", recordCid: "r", blobCid: "stale-b1", sortAt: new Date() },
-      { atUri: `at://${DID}/social.luminance.portfolio.photo/p3`, mediaIndex: 0, did: DID, source: "luminance", recordCid: "r", blobCid: "stale-b3", sortAt: new Date() },
+      { atUri: bskyRec("p1").uri, mediaIndex: 0, did: DID, source: "bsky", recordCid: "r", blobCid: "stale-b1", sortAt: new Date() },
+      { atUri: `at://${DID}/${BSKY_POST}/p3`, mediaIndex: 0, did: DID, source: "bsky", recordCid: "r", blobCid: "stale-b3", sortAt: new Date() },
     ]);
-    await runBackfill(db, new Indexer(db), DID, { fetchJson, resolvePds });
+    const fetchJsonBsky = async (url: string) => {
+      const u = new URL(url);
+      if (u.searchParams.get("collection") === BSKY_POST && !u.searchParams.get("cursor")) {
+        return { records: [bskyRec("p1"), bskyRec("p2")], cursor: undefined };
+      }
+      return { records: [] };
+    };
+    await runBackfill(db, new Indexer(db), DID, { fetchJson: fetchJsonBsky, resolvePds });
     const rows = await db.select().from(photos);
-    expect(rows.map((r) => r.atUri).sort()).toEqual([rec("p1").uri, rec("p2").uri].sort());
+    expect(rows.map((r) => r.atUri).sort()).toEqual([bskyRec("p1").uri, bskyRec("p2").uri].sort());
   });
 
   it("does NOT diff-delete when the walk was truncated by the cap", async () => {
     const db = await createTestDb();
     await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
     await db.insert(photos).values([
-      { atUri: `at://${DID}/social.luminance.portfolio.photo/p9`, mediaIndex: 0, did: DID, source: "luminance", recordCid: "r", blobCid: "b9", sortAt: new Date() },
+      { atUri: `at://${DID}/${BSKY_POST}/p9`, mediaIndex: 0, did: DID, source: "bsky", recordCid: "r", blobCid: "b9", sortAt: new Date() },
     ]);
     const paged = async (url: string) => {
       const u = new URL(url);
-      if (u.searchParams.get("collection") === "social.luminance.portfolio.photo") {
+      if (u.searchParams.get("collection") === BSKY_POST) {
         return u.searchParams.get("cursor")
-          ? { records: [rec("p2")], cursor: undefined }
-          : { records: [rec("p1")], cursor: "more" };
+          ? { records: [bskyRec("p2")], cursor: undefined }
+          : { records: [bskyRec("p1")], cursor: "more" };
       }
       return { records: [] };
     };
@@ -213,7 +232,8 @@ describe("opencontent reconciliation walk (watched collections)", () => {
     const db = await createTestDb();
     await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
     // op1 still in the repo; op3 was deleted upstream and its delete event was
-    // never delivered by the firehose — same shape as the LUMINANCE_PHOTO case.
+    // never delivered by the firehose — same reconciliation shape as the bsky
+    // case in "reconciliation (PDS truth diff)" above.
     await db.insert(photos).values([
       { atUri: ocPhotoRec("op1").uri, mediaIndex: 0, did: DID, source: "opencontent", recordCid: "r", blobCid: "stale-op1", sortAt: new Date() },
       { atUri: `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/op3`, mediaIndex: 0, did: DID, source: "opencontent", recordCid: "r", blobCid: "stale-op3", sortAt: new Date() },

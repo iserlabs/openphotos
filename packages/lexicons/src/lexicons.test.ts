@@ -1,52 +1,42 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { lexiconValidator, LUMINANCE_PHOTO, LUMINANCE_SERIES } from "./index.js";
+import { lexiconValidator, LUMINANCE_PROFILE } from "./index.js";
 
+// social.luminance.portfolio.{photo,series} were retired (zero records ever
+// existed — see docs/runbooks/publish-lexicons.md §7); social.luminance.actor.profile
+// is the only home-authored lexicon left in `lexicons`, so it carries this
+// suite's coverage of the validator itself (well-formed/malformed records,
+// blob hydration, and the no-GPS-fields guard).
 describe("luminance lexicons", () => {
-  it("validates a well-formed photo record", () => {
-    const res = lexiconValidator.validate(LUMINANCE_PHOTO, {
-      $type: LUMINANCE_PHOTO,
-      image: { $type: "blob", ref: { $link: "bafkreib3vqp" }, mimeType: "image/jpeg", size: 12345 },
-      createdAt: "2026-07-21T00:00:00.000Z",
-      exif: { camera: "Nikon Z8", iso: 640 },
+  it("validates a well-formed profile record", () => {
+    const res = lexiconValidator.validate(LUMINANCE_PROFILE, {
+      $type: LUMINANCE_PROFILE,
+      displayName: "Kevin",
+      bio: "Wildlife photographer",
+      websiteUrl: "https://klee.photos",
+      location: "Bergen County, NJ",
     });
     expect(res.success).toBe(true);
   });
-  it("rejects a photo without an image", () => {
-    const res = lexiconValidator.validate(LUMINANCE_PHOTO, { $type: LUMINANCE_PHOTO, createdAt: "2026-07-21T00:00:00.000Z" });
+  it("rejects a malformed profile (websiteUrl failing the uri format check)", () => {
+    const res = lexiconValidator.validate(LUMINANCE_PROFILE, {
+      $type: LUMINANCE_PROFILE,
+      websiteUrl: "not a url",
+    });
     expect(res.success).toBe(false);
   });
   it("has no GPS-shaped fields anywhere", () => {
     const raw = readFileSync(
-      fileURLToPath(new URL("../lexicons/social/luminance/portfolio/photo.json", import.meta.url)),
+      fileURLToPath(new URL("../lexicons/social/luminance/actor/profile.json", import.meta.url)),
       "utf-8",
     );
     expect(raw.toLowerCase()).not.toMatch(/gps|latitude|longitude/);
   });
-  it("validates a series record with a non-empty photos array (strongRef)", () => {
-    const res = lexiconValidator.validate(LUMINANCE_SERIES, {
-      $type: LUMINANCE_SERIES,
-      title: "T",
-      createdAt: "2026-07-21T00:00:00.000Z",
-      photos: [
-        {
-          uri: "at://did:plc:a/social.luminance.portfolio.photo/1",
-          cid: "bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a",
-        },
-      ],
-    });
-    expect(res.success).toBe(true);
-  });
-  it("validates a photo record carrying labels (com.atproto.label.defs#selfLabels)", () => {
-    const res = lexiconValidator.validate(LUMINANCE_PHOTO, {
-      $type: LUMINANCE_PHOTO,
-      image: { $type: "blob", ref: { $link: "bafkreib3vqp" }, mimeType: "image/jpeg", size: 12345 },
-      createdAt: "2026-07-21T00:00:00.000Z",
-      labels: {
-        $type: "com.atproto.label.defs#selfLabels",
-        values: [{ val: "nudity" }],
-      },
+  it("validates a profile record carrying an avatar blob (blob hydration)", () => {
+    const res = lexiconValidator.validate(LUMINANCE_PROFILE, {
+      $type: LUMINANCE_PROFILE,
+      avatar: { $type: "blob", ref: { $link: "bafkreib3vqp" }, mimeType: "image/jpeg", size: 12345 },
     });
     expect(res.success).toBe(true);
   });

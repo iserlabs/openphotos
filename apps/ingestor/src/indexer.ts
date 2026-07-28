@@ -1,12 +1,12 @@
 import { eq, inArray, or, sql } from "drizzle-orm";
 import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@luminance/db";
 import {
-  mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile,
+  mapLuminanceProfile, mapBskyPost, mapBskyProfile,
   mapGrainRecord, GRAIN_COLLECTIONS, mapOpencontentPhotograph, mapOpencontentCollection,
   type Ctx, type MappedPhoto, type MappedSeries,
 } from "@luminance/atproto";
 import {
-  LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
+  LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
   OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
 } from "@luminance/lexicons";
 
@@ -64,15 +64,7 @@ export class Indexer {
 
     const ctx: Ctx = { did: evt.did, collection: c.collection, rkey: c.rkey, cid: c.cid ?? "", indexedAt: new Date() };
     try {
-      if (c.collection === LUMINANCE_PHOTO) {
-        const m = mapLuminancePhoto(ctx, c.record);
-        if (!m) return void this.stats.skipped++;
-        await this.applyPhotoRows([m]);
-      } else if (c.collection === LUMINANCE_SERIES) {
-        const m = mapLuminanceSeries(ctx, c.record);
-        if (!m) return void this.stats.skipped++;
-        await this.applySeries(m);
-      } else if (c.collection === LUMINANCE_PROFILE) {
+      if (c.collection === LUMINANCE_PROFILE) {
         const p = mapLuminanceProfile(evt.did, c.record);
         await this.db.update(photographers).set({ displayName: p.displayName, bio: p.bio, website: p.website, location: p.location, avatarCid: p.avatarCid }).where(eq(photographers.did, evt.did));
       } else if (c.collection === BSKY_POST) {

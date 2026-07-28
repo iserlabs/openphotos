@@ -1,12 +1,12 @@
 import { Lexicons, BlobRef, type LexiconDoc, type ValidationResult } from "@atproto/lexicon";
-import photo from "../lexicons/social/luminance/portfolio/photo.json" with { type: "json" };
-import series from "../lexicons/social/luminance/portfolio/series.json" with { type: "json" };
 import profile from "../lexicons/social/luminance/actor/profile.json" with { type: "json" };
 import strongRef from "../lexicons/com/atproto/repo/strongRef.json" with { type: "json" };
 import labelDefs from "../lexicons/com/atproto/label/defs.json" with { type: "json" };
 
-export const LUMINANCE_PHOTO = "social.luminance.portfolio.photo";
-export const LUMINANCE_SERIES = "social.luminance.portfolio.series";
+// `social.luminance.portfolio.{photo,series}` were retired 2026-07-28 — zero
+// records ever existed in the wild (see docs/runbooks/publish-lexicons.md §7).
+// `social.opencontent.*` is the current portfolio vocabulary; its schema is
+// authored/owned externally (opencontent.social), so no local copy lives here.
 export const LUMINANCE_PROFILE = "social.luminance.actor.profile";
 export const BSKY_POST = "app.bsky.feed.post";
 export const BSKY_PROFILE = "app.bsky.actor.profile";
@@ -14,7 +14,7 @@ export const GRAIN_PREFIX = "social.grain.";
 export const OPENCONTENT_PHOTOGRAPH = "social.opencontent.photograph";
 export const OPENCONTENT_COLLECTION = "social.opencontent.collection";
 
-export const lexicons = [photo, series, profile, strongRef, labelDefs] as LexiconDoc[];
+export const lexicons = [profile, strongRef, labelDefs] as LexiconDoc[];
 
 /**
  * `@atproto/lexicon`'s blob validator requires an actual `BlobRef` instance

@@ -22,15 +22,23 @@ const FOLLOW_COLLECTION = "app.bsky.graph.follow";
 
 /**
  * One function, keyed on `photo.source`: bsky-source photos map onto a real
- * `app.bsky.feed.like` subject (their underlying post's uri+cid); luminance/
- * grain photos have no interaction lexicon yet (phase 3 fills this branch —
- * see design doc §2/§10). The UI renders `{supported:false}` as a disabled row.
+ * `app.bsky.feed.like` subject (their underlying post's uri+cid); grain/
+ * opencontent photos have no interaction lexicon yet (phase 3b fills this
+ * branch — see design doc §2/§10). The UI renders `{supported:false}` as a
+ * disabled row.
  */
 export function routeInteraction(
   photo: { source: string; atUri: string; recordCid: string },
 ): { supported: true; subject: { uri: string; cid: string } } | { supported: false } {
   if (photo.source === "bsky") {
     return { supported: true, subject: { uri: photo.atUri, cid: photo.recordCid } };
+  }
+  // social.opencontent.* photos have no interaction lexicon yet — same
+  // phase-3b gap as grain (see design doc §2/§10). Called out explicitly
+  // (instead of relying solely on the generic fallback below) to document
+  // this seam for whoever wires up opencontent interactions next.
+  if (photo.source === "opencontent") {
+    return { supported: false };
   }
   return { supported: false };
 }
