@@ -41,7 +41,7 @@ Authority for all: `opencontent.social` → **one** `_lexicon.opencontent.social
 | `title` | string | ≤200 graphemes, optional |
 | `description` | string | ≤2000, optional (caption) |
 | `alt` | string | ≤2000, optional — accessibility text, distinct from caption |
-| `exif` | object | optional; all-optional members: `camera` (string), `lens` (string), `focalLength` (string), `fNumber` (number), `shutterSpeed` (string), `iso` (integer) — matches the hub's existing display contract |
+| `exif` | object | optional; all-optional members: `camera` (string), `lens` (string), `focalLength` (string), `fNumber` (string — lexicons have no float type; "2.8" round-trips exactly), `shutterSpeed` (string), `iso` (integer) — matches the hub's existing display contract |
 | `tags` | string[] | ≤20 items, each ≤64 graphemes |
 | `license` | string | ≤200, freeform; SPDX recommended in docs |
 | `location` | string | ≤200, optional — *deliberate* place statement; never auto-filled from GPS |
