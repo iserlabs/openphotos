@@ -1,0 +1,1 @@
+ALTER TYPE "public"."photo_source" ADD VALUE 'opencontent';

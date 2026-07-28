@@ -43,6 +43,13 @@
       "when": 1784991763330,
       "tag": "0005_admin_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785255857120,
+      "tag": "0006_opencontent_source",
+      "breakpoints": true
     }
   ]
 }

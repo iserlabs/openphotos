@@ -3,7 +3,7 @@ import { pgTable, pgEnum, text, integer, boolean, timestamp, jsonb, bigint, prim
 export const photographerStatus = pgEnum("photographer_status",
   ["active", "pending_review", "deactivated", "deregistered", "takedown"]);
 export const backfillStatus = pgEnum("backfill_status", ["pending", "running", "complete", "failed"]);
-export const photoSource = pgEnum("photo_source", ["luminance", "bsky", "grain"]);
+export const photoSource = pgEnum("photo_source", ["luminance", "bsky", "grain", "opencontent"]);
 export const interactionKind = pgEnum("interaction_kind", ["like", "comment", "follow"]);
 
 // ---- durable app state ----
