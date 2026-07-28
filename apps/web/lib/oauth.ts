@@ -22,7 +22,19 @@ function clientMetadata() {
     redirect_uris: [`${base}/oauth/callback`] as [string],
     grant_types: ["authorization_code", "refresh_token"] as ["authorization_code", "refresh_token"],
     response_types: ["code"] as ["code"],
-    scope: "atproto",
+    // "atproto" alone only establishes identity -- @atproto/oauth-scopes'
+    // granular ScopePermissionsTransition model (see @atproto/pds's
+    // auth-verifier, which enforces it) gates createRecord/deleteRecord/
+    // uploadBlob on the additional `transition:generic` scope, and rejects
+    // writes from a bare-`atproto` session with ScopeMissingError. Our
+    // writes (interactions.ts, photo/actions.ts, register/actions.ts) work
+    // today only because granular enforcement is unevenly rolled out across
+    // the PDS fleet (bsky Aug-2025 discussion #4118) -- a ticking defect,
+    // not a guarantee. `transition:generic` is the same package's
+    // documented backward-compat scope restoring the older full-account
+    // access a plain scope string used to imply, which is exactly what
+    // every write path here needs.
+    scope: "atproto transition:generic",
     application_type: "web" as const,
     token_endpoint_auth_method: "private_key_jwt" as const,
     token_endpoint_auth_signing_alg: "ES256",
@@ -31,15 +43,41 @@ function clientMetadata() {
   };
 }
 
+// Memoized client, gated on reference-equality of the `db` argument (not a
+// computed key). The state/session stores below close over `db` directly --
+// they don't just take it as a one-off parameter, they read through it on
+// every call for the client's whole lifetime -- so a cached client is only
+// safe to hand back when the *exact same* `db` instance is passed again. In
+// production every call site (see apps/web/lib/db.ts's `getDb()`) resolves
+// through the same module-level `db ??= createDb(...)` singleton, so this
+// reference check hits on effectively every call, same as if we'd keyed on
+// nothing at all. It only rebuilds when a genuinely different `db` shows up
+// (e.g. a fresh per-test db), which is the correct behavior there too:
+// reusing a client built against a stale/different db would silently read
+// and write OAuth state through the wrong connection.
+let cachedOAuthClient: { db: Db; client: NodeOAuthClient } | undefined;
+
 /**
- * Construct a per-request OAuth client. Built lazily (never at module load) so
- * the app builds with zero env vars — `env.*` and `OAUTH_JWK_1` are only read
- * when a real OAuth request comes in. State/session are persisted in Postgres
- * via the Drizzle-backed SimpleStores below so the flow survives across the
- * stateless serverless requests of the authorize -> callback round-trip.
+ * Construct (or reuse) the OAuth client. Built lazily (never at module load)
+ * so the app builds with zero env vars — `env.*` and `OAUTH_JWK_1` are only
+ * read when a real OAuth request comes in. State/session are persisted in
+ * Postgres via the Drizzle-backed SimpleStores below so the flow survives
+ * across the stateless serverless requests of the authorize -> callback
+ * round-trip.
+ *
+ * Memoized (see {@link cachedOAuthClient}) rather than rebuilt on every
+ * call: `@atproto/oauth-client`'s DPoP-nonce cache lives ON the client
+ * instance (an in-memory `SimpleStoreMemory`, per its own source), not in
+ * our Postgres stores. A fresh `NodeOAuthClient` per call means a fresh,
+ * empty nonce cache every time, forcing a nonce-discovery round trip on
+ * every authenticated PDS request instead of just the first (same defect
+ * class open-portfolio's `apps/site/lib/oauth.ts` hit and fixed with its own
+ * config-keyed cache). This app's client config (env vars) is fixed for the
+ * process lifetime, so reusing one client for the process's life is safe.
  */
 export async function getOAuthClient(db: Db): Promise<NodeOAuthClient> {
-  return new NodeOAuthClient({
+  if (cachedOAuthClient?.db === db) return cachedOAuthClient.client;
+  const client = new NodeOAuthClient({
     clientMetadata: clientMetadata(),
     keyset: [await JoseKey.fromImportable(env.OAUTH_JWK_1)],
     stateStore: {
@@ -73,6 +111,8 @@ export async function getOAuthClient(db: Db): Promise<NodeOAuthClient> {
       },
     },
   });
+  cachedOAuthClient = { db, client };
+  return client;
 }
 
 /**
