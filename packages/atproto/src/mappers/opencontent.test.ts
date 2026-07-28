@@ -66,6 +66,71 @@ describe("mapOpencontentPhotograph", () => {
     const m = mapOpencontentPhotograph(photoCtx, minimal)!;
     expect(m).toMatchObject({ title: null, caption: null, alt: null, license: null, tags: [], labels: [], exif: null, capturedAt: null });
   });
+
+  it("happy path: valid exif passes through unchanged", () => {
+    const m = mapOpencontentPhotograph(photoCtx, photograph)!;
+    expect(m.exif).toEqual({
+      camera: "Nikon Z9", lens: "NIKKOR Z 600mm f/6.3 VR S", focalLength: "600mm",
+      fNumber: "6.3", shutterSpeed: "1/3200", iso: 800, location: "Wanaque Reservoir, NJ",
+    });
+  });
+
+  it("untrusted-publisher hardening: drops non-primitive exif members, clamps oversized strings, caps tags at 20", () => {
+    const oversizedLocation = "x".repeat(2000);
+    const hostile = {
+      ...photograph,
+      exif: {
+        camera: "Nikon Z9", // valid string, kept
+        lens: ["not", "a", "string"], // non-primitive, dropped
+        focalLength: "600mm", // valid string, kept
+        fNumber: 6.3, // wrong type (number, spec requires string), dropped
+        shutterSpeed: "1/3200", // valid string, kept
+        iso: {}, // non-primitive, dropped
+      },
+      location: oversizedLocation,
+      tags: [
+        ...Array.from({ length: 20 }, (_, i) => `tag${i}`),
+        { not: "a string" }, 42, null, ["nested"],
+        "tag20", "tag21", "tag22", "tag23", "tag24",
+      ],
+    };
+    const m = mapOpencontentPhotograph(photoCtx, hostile)!;
+
+    // Only primitives ever enter the jsonb.
+    for (const v of Object.values(m.exif!)) {
+      expect(["string", "number"]).toContain(typeof v);
+    }
+    expect(m.exif).toEqual({
+      camera: "Nikon Z9", focalLength: "600mm", shutterSpeed: "1/3200",
+      location: "x".repeat(800),
+    });
+    expect(m.exif!.lens).toBeUndefined();
+    expect(m.exif!.fNumber).toBeUndefined();
+    expect(m.exif!.iso).toBeUndefined();
+    expect(Buffer.byteLength((m.exif as Record<string, string>).location, "utf8")).toBe(800);
+
+    // Tags: max 20 entries, non-strings dropped, order preserved among strings.
+    expect(m.tags).toHaveLength(20);
+    for (const t of m.tags) expect(typeof t).toBe("string");
+    expect(m.tags[0]).toBe("tag0");
+    expect(m.tags[19]).toBe("tag19");
+  });
+
+  it("untrusted-publisher hardening: clamps oversized exif string members to 256 bytes", () => {
+    const oversized = "y".repeat(1000);
+    const hostile = { ...photograph, exif: { camera: oversized } };
+    const m = mapOpencontentPhotograph(photoCtx, hostile)!;
+    expect(Buffer.byteLength((m.exif as Record<string, string>).camera, "utf8")).toBe(256);
+  });
+
+  it("untrusted-publisher hardening: iso only accepted as a finite non-negative integer", () => {
+    const base = { ...photograph, location: undefined };
+    expect(mapOpencontentPhotograph(photoCtx, { ...base, exif: { iso: 3.5 } })!.exif).toBeNull();
+    expect(mapOpencontentPhotograph(photoCtx, { ...base, exif: { iso: -1 } })!.exif).toBeNull();
+    expect(mapOpencontentPhotograph(photoCtx, { ...base, exif: { iso: Infinity } })!.exif).toBeNull();
+    expect(mapOpencontentPhotograph(photoCtx, { ...base, exif: { iso: "800" } })!.exif).toBeNull();
+    expect(mapOpencontentPhotograph(photoCtx, { ...base, exif: { iso: 0 } })!.exif).toEqual({ iso: 0 });
+  });
 });
 
 describe("mapOpencontentCollection", () => {
@@ -130,5 +195,18 @@ describe("mapOpencontentCollection", () => {
     expect(mapOpencontentCollection(collectionCtx, null)).toBeNull();
     expect(mapOpencontentCollection(collectionCtx, {})).toBeNull();
     expect(mapOpencontentCollection(collectionCtx, "not an object")).toBeNull();
+  });
+
+  it("untrusted-publisher hardening: caps items at 500 entries, excess truncated, order preserved", () => {
+    const bigItems = Array.from({ length: 510 }, (_, i) => ({
+      uri: `at://did:plc:kleephotos/social.opencontent.photograph/item${i}`,
+      cid: `bafyreibig${i}`,
+    }));
+    const m = mapOpencontentCollection(collectionCtx, {
+      title: "Huge Collection", items: bigItems, createdAt: "2026-07-01T00:00:00Z",
+    })!;
+    expect(m.items).toHaveLength(500);
+    expect(m.items[0]).toEqual({ photoUri: "at://did:plc:kleephotos/social.opencontent.photograph/item0", position: 0 });
+    expect(m.items[499]).toEqual({ photoUri: "at://did:plc:kleephotos/social.opencontent.photograph/item499", position: 499 });
   });
 });
