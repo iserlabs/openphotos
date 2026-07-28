@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { Agent } from "@atproto/api";
+import { Agent, XRPCError } from "@atproto/api";
 import {
   photographers,
   recordInteraction,
@@ -109,6 +109,47 @@ async function getAgentOrExpired(
 }
 
 /**
+ * Detects a PDS write rejected for insufficient OAuth scope -- the
+ * `ScopeMissingError` that `@atproto/oauth-scopes`' `ScopePermissions.assertRepo`
+ * throws when a session's granted scope lacks `transition:generic` (see the
+ * `scope` doc comment in `lib/oauth.ts`). Pre-fix sessions carry the old,
+ * narrower `"atproto"`-only grant until they re-auth, so this is a real,
+ * reachable path, not a hypothetical.
+ *
+ * The wire shape below is verified against the exact dependency versions
+ * installed in this repo, not guessed:
+ *
+ *   - PDS (`@atproto/pds@0.5.21`): `createRecord`/`deleteRecord` call
+ *     `auth.credentials.permissions.assertRepo({ action, collection })` when
+ *     `auth.credentials.type === "oauth"` --
+ *     `node_modules/@atproto/pds/dist/api/com/atproto/repo/{createRecord,deleteRecord}.js`.
+ *   - `assertRepo` (`@atproto/oauth-scopes@0.5.6`'s `ScopePermissions`,
+ *     `dist/scope-permissions.js`) throws `new ScopeMissingError(scope)` when
+ *     `allowsRepo` is false. `ScopeMissingError` (`dist/scope-missing-error.js`)
+ *     sets `name: "ScopeMissingError"`, `status: 403`, `expose: true` --
+ *     deliberately mimicking the `http-errors` package's shape so the PDS's
+ *     xrpc-server treats it as a normal HTTP error.
+ *   - The PDS's xrpc-server (`@atproto/xrpc-server`'s `dist/errors.js`,
+ *     `XRPCError.fromError`) turns anything matching that shape into
+ *     `{ status: cause.status, error: cause.name, message: cause.message }`
+ *     on the wire: HTTP 403 with JSON body
+ *     `{ "error": "ScopeMissingError", "message": "Missing required scope \"...\"" }`.
+ *   - Our client (`@atproto/xrpc@0.8.6`'s `dist/xrpc-client.js`, whose
+ *     `XRPCError` class `@atproto/api` re-exports as-is) parses that body
+ *     straight into `new XRPCError(resCode, error, message, headers)` --
+ *     unwrapped, so what a write path here actually catches has
+ *     `.status === 403` and `.error === "ScopeMissingError"`.
+ *
+ * A fresh authorization grant -- issued under the now `transition:generic`-
+ * inclusive scope -- is the only remedy, so routing this through the same
+ * re-login flow as an expired/revoked session ({@link SESSION_EXPIRED_ERROR})
+ * is the correct fix, not a stopgap.
+ */
+export function isScopeOrAuthError(err: unknown): boolean {
+  return err instanceof XRPCError && err.status === 403 && err.error === "ScopeMissingError";
+}
+
+/**
  * Best-effort actor-avatar snapshot for write-through notifications (the
  * sweep path snapshots avatars; this fills the same field at interaction
  * time so fresh notifications aren't avatar-less). Public AppView lookup,
@@ -188,7 +229,8 @@ export async function likePhoto(
       record: buildLikeRecord({ uri: subject.uri, cid: subject.cid }),
     });
     created = res.data;
-  } catch {
+  } catch (err) {
+    if (isScopeOrAuthError(err)) return { ok: false, error: SESSION_EXPIRED_ERROR };
     return { ok: false, error: "could not create the like on Bluesky" };
   }
 
@@ -278,7 +320,8 @@ export async function unlikePhoto(
 
   try {
     await agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: LIKE_COLLECTION, rkey });
-  } catch {
+  } catch (err) {
+    if (isScopeOrAuthError(err)) return { ok: false, error: SESSION_EXPIRED_ERROR };
     return { ok: false, error: "could not remove the like on Bluesky" };
   }
 
@@ -368,7 +411,8 @@ export async function commentOnPhoto(
       record,
     });
     created = res.data;
-  } catch {
+  } catch (err) {
+    if (isScopeOrAuthError(err)) return { ok: false, error: SESSION_EXPIRED_ERROR };
     return { ok: false, error: "could not create the comment on Bluesky" };
   }
 
@@ -446,7 +490,8 @@ export async function deleteOwnComment(
   if (!restored.agent) return { ok: false, error: restored.error };
   try {
     await restored.agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: parts.collection, rkey: parts.rkey });
-  } catch {
+  } catch (err) {
+    if (isScopeOrAuthError(err)) return { ok: false, error: SESSION_EXPIRED_ERROR };
     return { ok: false, error: "could not delete the comment on Bluesky" };
   }
 
@@ -551,7 +596,8 @@ export async function followPhotographer(
       record: buildFollowRecord(target.photographerDid),
     });
     created = res.data;
-  } catch {
+  } catch (err) {
+    if (isScopeOrAuthError(err)) return { ok: false, error: SESSION_EXPIRED_ERROR };
     return { ok: false, error: "could not follow on Bluesky" };
   }
 
@@ -593,7 +639,8 @@ export async function unfollowPhotographer(
   if (!restored.agent) return { ok: false, error: restored.error };
   try {
     await restored.agent.com.atproto.repo.deleteRecord({ repo: actorDid, collection: FOLLOW_COLLECTION, rkey });
-  } catch {
+  } catch (err) {
+    if (isScopeOrAuthError(err)) return { ok: false, error: SESSION_EXPIRED_ERROR };
     return { ok: false, error: "could not unfollow on Bluesky" };
   }
 

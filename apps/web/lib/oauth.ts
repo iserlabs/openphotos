@@ -34,6 +34,15 @@ function clientMetadata() {
     // documented backward-compat scope restoring the older full-account
     // access a plain scope string used to imply, which is exactly what
     // every write path here needs.
+    //
+    // Pre-fix sessions keep their narrower grant until they re-auth, so a
+    // ScopeMissingError from a not-yet-re-authed session is a real,
+    // reachable path even after this change. `interactions.ts`'s
+    // `isScopeOrAuthError` detects that exact rejection (verified against
+    // the installed @atproto/pds + @atproto/oauth-scopes + @atproto/xrpc
+    // sources) and every write path there routes it through
+    // SESSION_EXPIRED_ERROR -- i.e. re-login, the only actual remedy. This
+    // routing is real as of that change, not aspirational.
     scope: "atproto transition:generic",
     application_type: "web" as const,
     token_endpoint_auth_method: "private_key_jwt" as const,

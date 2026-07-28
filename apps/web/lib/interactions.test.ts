@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { Agent } from "@atproto/api";
+import { XRPCError, type Agent } from "@atproto/api";
 import { createTestDb, photographers, interactions, notifications, type Db } from "@luminance/db";
 import { COMMENT_MAX_GRAPHEMES } from "@luminance/atproto";
 import {
@@ -11,6 +11,7 @@ import {
   followPhotographer,
   unfollowPhotographer,
   assertRateLimit,
+  isScopeOrAuthError,
   RateLimitError,
   RATE_LIMIT,
   type LikeSubject,
@@ -75,6 +76,16 @@ function withFailingInsert(db: Db): Db {
       return typeof value === "function" ? value.bind(target) : value;
     },
   }) as Db;
+}
+
+/**
+ * Builds the exact `XRPCError` shape the PDS's `ScopeMissingError` becomes
+ * once it crosses the wire — see the verification chain documented on
+ * `isScopeOrAuthError` in `interactions.ts`. HTTP 403, `error:
+ * "ScopeMissingError"`, a `Missing required scope "..."` message.
+ */
+function scopeMissingError(): XRPCError {
+  return new XRPCError(403, "ScopeMissingError", 'Missing required scope "repo:app.bsky.feed.like?action=create"');
 }
 
 describe("routeInteraction", () => {
@@ -776,6 +787,131 @@ describe("expired-session detection", () => {
     const result = await followPhotographer(db, throwingFactory, VIEWER, "viewer.test", {
       photographerDid: PHOTOGRAPHER,
     });
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+});
+
+describe("isScopeOrAuthError", () => {
+  it("recognizes the verified ScopeMissingError wire shape (403, error: ScopeMissingError)", () => {
+    expect(isScopeOrAuthError(scopeMissingError())).toBe(true);
+  });
+  it("rejects an XRPCError with the right status but a different error name", () => {
+    expect(isScopeOrAuthError(new XRPCError(403, "Forbidden", "nope"))).toBe(false);
+  });
+  it("rejects an XRPCError with the right error name but a different status", () => {
+    expect(isScopeOrAuthError(new XRPCError(401, "ScopeMissingError", "nope"))).toBe(false);
+  });
+  it("rejects a plain Error, and non-error values", () => {
+    expect(isScopeOrAuthError(new Error("db unavailable"))).toBe(false);
+    expect(isScopeOrAuthError(undefined)).toBe(false);
+    expect(isScopeOrAuthError("some string")).toBe(false);
+  });
+});
+
+// A PDS rejecting a write with ScopeMissingError (session was granted the
+// pre-fix "atproto"-only scope, never re-authed under the now
+// transition:generic-inclusive one — see lib/oauth.ts) must route the same
+// as an expired/revoked session: SESSION_EXPIRED_ERROR, so the client sends
+// the viewer through re-login, the only actual remedy. One case per write
+// path (all six catch sites), plus a negative control proving a same-shaped
+// but non-scope PDS error still falls through to its normal generic message
+// rather than being swallowed into a bogus re-auth prompt.
+describe("PDS scope rejection routes to re-auth", () => {
+  it("likePhoto: createRecord rejected for scope -> session-expired", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => {
+        throw scopeMissingError();
+      },
+    });
+    const result = await likePhoto(db, async () => agent, VIEWER, makeSubject());
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+
+  it("likePhoto: a differently-shaped createRecord failure still returns the generic message (negative control)", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => {
+        throw new XRPCError(500, "InternalServerError", "boom");
+      },
+    });
+    const result = await likePhoto(db, async () => agent, VIEWER, makeSubject());
+    expect(result).toEqual({ ok: false, error: "could not create the like on Bluesky" });
+  });
+
+  it("unlikePhoto: deleteRecord rejected for scope -> session-expired", async () => {
+    const db = await createTestDb();
+    await db.insert(interactions).values({
+      recordUri: "at://did:plc:viewer/app.bsky.feed.like/mylike1",
+      actorDid: VIEWER,
+      kind: "like",
+      subjectUri: POST_URI,
+    });
+    const { agent } = makeFakeAgent({
+      deleteRecord: async () => {
+        throw scopeMissingError();
+      },
+    });
+    const result = await unlikePhoto(db, async () => agent, VIEWER, POST_URI);
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+
+  it("commentOnPhoto: createRecord rejected for scope -> session-expired", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => {
+        throw scopeMissingError();
+      },
+    });
+    const result = await commentOnPhoto(db, async () => agent, VIEWER, "viewer.test", {
+      subject: { uri: POST_URI, cid: POST_CID },
+      text: "nice shot",
+      photographerDid: PHOTOGRAPHER,
+      photoLinkUri: POST_URI,
+    });
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+
+  it("deleteOwnComment: deleteRecord rejected for scope -> session-expired", async () => {
+    const db = await createTestDb();
+    const recordUri = "at://did:plc:viewer/app.bsky.feed.post/mycomment1";
+    await db.insert(interactions).values({ recordUri, actorDid: VIEWER, kind: "comment", subjectUri: POST_URI, text: "hi" });
+    const { agent } = makeFakeAgent({
+      deleteRecord: async () => {
+        throw scopeMissingError();
+      },
+    });
+    const result = await deleteOwnComment(db, async () => agent, VIEWER, recordUri);
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+
+  it("followPhotographer: createRecord rejected for scope -> session-expired", async () => {
+    const db = await createTestDb();
+    const { agent } = makeFakeAgent({
+      createRecord: async () => {
+        throw scopeMissingError();
+      },
+    });
+    const result = await followPhotographer(db, async () => agent, VIEWER, "viewer.test", {
+      photographerDid: PHOTOGRAPHER,
+    });
+    expect(result).toEqual({ ok: false, error: "session-expired" });
+  });
+
+  it("unfollowPhotographer: deleteRecord rejected for scope -> session-expired", async () => {
+    const db = await createTestDb();
+    await db.insert(interactions).values({
+      recordUri: "at://did:plc:viewer/app.bsky.graph.follow/f1",
+      actorDid: VIEWER,
+      kind: "follow",
+      subjectUri: PHOTOGRAPHER,
+    });
+    const { agent } = makeFakeAgent({
+      deleteRecord: async () => {
+        throw scopeMissingError();
+      },
+    });
+    const result = await unfollowPhotographer(db, async () => agent, VIEWER, PHOTOGRAPHER);
     expect(result).toEqual({ ok: false, error: "session-expired" });
   });
 });
