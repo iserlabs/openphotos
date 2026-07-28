@@ -63,7 +63,7 @@ Authority for all: `opencontent.social` → **one** `_lexicon.opencontent.social
 
 ### `social.opencontent.site` (rkey `self`, one per repo)
 
-`title` (≤200), `about` (≤5000, optional), `collectionOrder` (**rkey strings**, ≤100 — public-site nav order; rkeys, not at-uris, because the record can only ever order collections in its own repo and embedding the repo's own DID in every entry is redundant), `links` (≤10 of `{label ≤50, url}`), `theme` (≤64 freeform string; product-specific values allowed), `createdAt`.
+`title` (≤200), `about` (≤5000, optional), `collectionOrder` (**rkey strings**, ≤100 — public-site nav order; rkeys, not at-uris, because the record can only ever order collections in its own repo and embedding the repo's own DID in every entry is redundant), `links` (≤10 of `{label ≤50, uri}`), `theme` (≤64 freeform string; product-specific values allowed), `createdAt`.
 
 **Rkeys:** TIDs for photographs/collections; `self` for site.
 
