@@ -25,7 +25,7 @@
 - **G1 (before Part D):** Kevin provisions the staging VPS + a scratch hostname pair (apex + `pds.`) pointed at it.
 - **G2 (cutover):** Kevin flips klee.photos DNS at acceptance; Format stays as rollback.
 
-New repo location: `~/workspace/open-portfolio` (GitHub `iserlabs/open-portfolio`, created in Task A1).
+New repo location: `~/workspace/iserlabs/applications/open-portfolio` (GitHub `iserlabs/open-portfolio`, created in Task A1).
 
 ---
 
@@ -34,7 +34,7 @@ New repo location: `~/workspace/open-portfolio` (GitHub `iserlabs/open-portfolio
 ### Task A1: Repo scaffold
 
 **Files:**
-- Create: `~/workspace/open-portfolio/` — `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `apps/site/` (Next.js 16 app: `package.json`, `next.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/page.tsx`, `postcss.config.mjs`, `app/globals.css`), `packages/lexicons/` (`package.json`, `tsconfig.json`, `src/index.ts`), `.github/workflows/ci.yml`, `.gitignore`, `README.md`
+- Create: `~/workspace/iserlabs/applications/open-portfolio/` — `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `apps/site/` (Next.js 16 app: `package.json`, `next.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/page.tsx`, `postcss.config.mjs`, `app/globals.css`), `packages/lexicons/` (`package.json`, `tsconfig.json`, `src/index.ts`), `.github/workflows/ci.yml`, `.gitignore`, `README.md`
 
 **Interfaces:**
 - Produces: workspace commands `pnpm build`, `pnpm test`, `pnpm typecheck` (turbo across `apps/site` + `packages/lexicons`); `apps/site` renders a placeholder page.
