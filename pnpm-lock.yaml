@@ -20,13 +20,13 @@ importers:
 
   apps/ingestor:
     dependencies:
-      '@luminance/atproto':
+      '@openphotos/atproto':
         specifier: workspace:*
         version: link:../../packages/atproto
-      '@luminance/db':
+      '@openphotos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@luminance/lexicons':
+      '@openphotos/lexicons':
         specifier: workspace:*
         version: link:../../packages/lexicons
       '@sentry/node':
@@ -63,18 +63,18 @@ importers:
       '@atproto/oauth-client-node':
         specifier: ^0.4.9
         version: 0.4.9
-      '@luminance/atproto':
+      '@openphotos/atproto':
         specifier: workspace:*
         version: link:../../packages/atproto
-      '@luminance/db':
+      '@openphotos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@luminance/lexicons':
+      '@openphotos/lexicons':
         specifier: workspace:*
         version: link:../../packages/lexicons
       '@sentry/nextjs':
         specifier: ^10.67.0
-        version: 10.67.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(next@16.2.11(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
+        version: 10.67.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.4)(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1)(kysely@0.29.4)(pg@8.22.0)(postgres@3.4.9)
@@ -83,7 +83,7 @@ importers:
         version: 8.0.4
       next:
         specifier: 16.2.11
-        version: 16.2.11(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -124,10 +124,10 @@ importers:
 
   packages/atproto:
     dependencies:
-      '@luminance/db':
+      '@openphotos/db':
         specifier: workspace:*
         version: link:../db
-      '@luminance/lexicons':
+      '@openphotos/lexicons':
         specifier: workspace:*
         version: link:../lexicons
       ipaddr.js:
@@ -5671,7 +5671,7 @@ snapshots:
     dependencies:
       '@sentry/core': 10.67.0
 
-  '@sentry/nextjs@10.67.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(next@16.2.11(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)':
+  '@sentry/nextjs@10.67.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.10.0(@opentelemetry/api@1.9.1))(next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@rollup/plugin-commonjs': 28.0.1(rollup@4.62.2)
@@ -5685,7 +5685,7 @@ snapshots:
       '@sentry/server-utils': 10.67.0
       '@sentry/vercel-edge': 10.67.0
       '@sentry/webpack-plugin': 5.4.0(rollup@4.62.2)
-      next: 16.2.11(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      next: 16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rollup: 4.62.2
       stacktrace-parser: 0.1.11
     transitivePeerDependencies:
@@ -6948,7 +6948,7 @@ snapshots:
 
   neo-async@2.6.2: {}
 
-  next@16.2.11(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.2.11
       '@swc/helpers': 0.5.15
@@ -6957,7 +6957,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-      styled-jsx: 5.1.6(react@19.2.4)
+      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.4)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.2.11
       '@next/swc-darwin-x64': 16.2.11
@@ -7587,10 +7587,12 @@ snapshots:
 
   structured-headers@1.0.1: {}
 
-  styled-jsx@5.1.6(react@19.2.4):
+  styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.4):
     dependencies:
       client-only: 0.0.1
       react: 19.2.4
+    optionalDependencies:
+      '@babel/core': 7.29.7
 
   tailwindcss@4.3.3: {}
 

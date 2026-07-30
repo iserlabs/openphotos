@@ -1,6 +1,6 @@
 import { eq, ne, and } from "drizzle-orm";
-import { photographers, type Db } from "@luminance/db";
-import { resolvePdsEndpoint, safeJsonFetch } from "@luminance/atproto";
+import { photographers, type Db } from "@openphotos/db";
+import { resolvePdsEndpoint, safeJsonFetch } from "@openphotos/atproto";
 
 /**
  * Automatic content freshness without the firehose: the public Jetstream feed

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { TestNetworkNoAppView } from "@atproto/dev-env";
 import type { AtpAgent } from "@atproto/api";
-import { createTestDb, photographers, photos } from "@luminance/db";
+import { createTestDb, photographers, photos } from "@openphotos/db";
 import { Indexer } from "../indexer.js";
 import { runBackfill } from "../backfill.js";
-import { OPENCONTENT_PHOTOGRAPH } from "@luminance/lexicons";
+import { OPENCONTENT_PHOTOGRAPH } from "@openphotos/lexicons";
 
 // ── Integration gate (spec §13) + rebuild drill (success criterion 3) ─────────
 // Writes REAL records into a REAL local PDS (@atproto/dev-env), really backfills

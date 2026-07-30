@@ -86,7 +86,7 @@ packages:
 `packages/db/package.json`:
 ```json
 {
-  "name": "@luminance/db",
+  "name": "@openphotos/db",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -101,18 +101,18 @@ packages:
 
 `packages/db/src/index.ts`:
 ```ts
-export const DB_PACKAGE = "@luminance/db";
+export const DB_PACKAGE = "@openphotos/db";
 ```
 
 - [ ] **Step 2: Write smoke test** — `packages/db/src/smoke.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 import { DB_PACKAGE } from "./index.js";
-describe("workspace", () => { it("resolves", () => expect(DB_PACKAGE).toBe("@luminance/db")); });
+describe("workspace", () => { it("resolves", () => expect(DB_PACKAGE).toBe("@openphotos/db")); });
 ```
 
 - [ ] **Step 3: Install and run** — Run: `pnpm install && pnpm test`
-Expected: turbo runs `@luminance/db` test, 1 passed.
+Expected: turbo runs `@openphotos/db` test, 1 passed.
 
 - [ ] **Step 4: Commit**
 ```bash
@@ -133,7 +133,7 @@ git add -A && git commit -m "chore: scaffold pnpm+turbo monorepo"
 
 - [ ] **Step 1: Add deps**
 ```bash
-pnpm --filter @luminance/db add drizzle-orm postgres && pnpm --filter @luminance/db add -D drizzle-kit @electric-sql/pglite
+pnpm --filter @openphotos/db add drizzle-orm postgres && pnpm --filter @openphotos/db add -D drizzle-kit @electric-sql/pglite
 ```
 
 - [ ] **Step 2: Write schema** — `packages/db/src/schema.ts` (complete, per spec §8):
@@ -251,7 +251,7 @@ export default defineConfig({
   dbCredentials: { url: process.env.DATABASE_URL ?? "postgres://localhost/luminance" },
 });
 ```
-Run: `pnpm --filter @luminance/db exec drizzle-kit generate --name init`
+Run: `pnpm --filter @openphotos/db exec drizzle-kit generate --name init`
 Expected: `packages/db/migrations/0000_init.sql` created.
 
 `packages/db/src/test-db.ts` (used by every downstream test):
@@ -307,7 +307,7 @@ describe("feedPage", () => {
   });
 });
 ```
-Run: `pnpm --filter @luminance/db test` — Expected: FAIL (`feed.js` not found).
+Run: `pnpm --filter @openphotos/db test` — Expected: FAIL (`feed.js` not found).
 
 - [ ] **Step 5: Implement** — `packages/db/src/feed.ts`:
 ```ts
@@ -356,7 +356,7 @@ export * from "./test-db.js"; // downstream task tests import createTestDb from 
 ```
 Delete `packages/db/src/smoke.test.ts`.
 
-- [ ] **Step 6: Run** — `pnpm --filter @luminance/db test` — Expected: PASS (2 tests). Also `pnpm typecheck` passes.
+- [ ] **Step 6: Run** — `pnpm --filter @openphotos/db test` — Expected: PASS (2 tests). Also `pnpm typecheck` passes.
 
 - [ ] **Step 7: Commit**
 ```bash
@@ -377,9 +377,9 @@ git add -A && git commit -m "feat(db): schema, migrations, keyset feed query wit
 - [ ] **Step 1: Package + deps**
 ```bash
 mkdir -p packages/lexicons/src packages/lexicons/lexicons/social/luminance/{portfolio,actor}
-pnpm --filter @luminance/lexicons add @atproto/lexicon
+pnpm --filter @openphotos/lexicons add @atproto/lexicon
 ```
-`packages/lexicons/package.json` / `tsconfig.json`: same shape as `@luminance/db`'s (name `@luminance/lexicons`).
+`packages/lexicons/package.json` / `tsconfig.json`: same shape as `@openphotos/db`'s (name `@openphotos/lexicons`).
 
 - [ ] **Step 2: Write lexicon JSON** — `photo.json` (complete; note **no GPS fields exist**, spec §7):
 ```json
@@ -497,7 +497,7 @@ describe("luminance lexicons", () => {
   });
 });
 ```
-Run: `pnpm --filter @luminance/lexicons test` — Expected: FAIL (no index.ts).
+Run: `pnpm --filter @openphotos/lexicons test` — Expected: FAIL (no index.ts).
 
 - [ ] **Step 4: Implement** — `packages/lexicons/src/index.ts`:
 ```ts
@@ -518,7 +518,7 @@ export const lexiconValidator = new Lexicons(lexicons);
 ```
 Note: `com.atproto.label.defs#selfLabels` / `strongRef` refs resolve at *runtime validation of those fields only*; `Lexicons` treats unresolved refs leniently for unknown unions. If `new Lexicons()` throws on unresolved refs, vendor the two upstream docs: download `https://raw.githubusercontent.com/bluesky-social/atproto/main/lexicons/com/atproto/label/defs.json` and `.../com/atproto/repo/strongRef.json` into `packages/lexicons/lexicons/com/atproto/...` and add them to the `lexicons` array. Do whichever the test run demands — the test is the arbiter.
 
-- [ ] **Step 5: Run** — `pnpm --filter @luminance/lexicons test` — Expected: PASS (3 tests).
+- [ ] **Step 5: Run** — `pnpm --filter @openphotos/lexicons test` — Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 ```bash
@@ -536,9 +536,9 @@ git add -A && git commit -m "feat(lexicons): social.luminance.* lexicon docs + v
 **Interfaces:**
 - Produces: `assertPublicHttps(url: string): Promise<URL>` (throws `UnsafeUrlError`); `safeJsonFetch(url: string): Promise<unknown>`; `resolvePdsEndpoint(did: string, fetchJson?): Promise<string>` (accepts injectable fetcher for tests); `isPrivateIp(ip: string): boolean`.
 
-- [ ] **Step 1: Package** — same package.json/tsconfig shape, name `@luminance/atproto`, deps:
+- [ ] **Step 1: Package** — same package.json/tsconfig shape, name `@openphotos/atproto`, deps:
 ```bash
-pnpm --filter @luminance/atproto add @luminance/lexicons@workspace:* @luminance/db@workspace:*
+pnpm --filter @openphotos/atproto add @openphotos/lexicons@workspace:* @openphotos/db@workspace:*
 ```
 
 - [ ] **Step 2: Failing security tests** — `packages/atproto/src/safe-fetch.test.ts` (these are the spec §11/§13 permanent regression fixtures):
@@ -578,7 +578,7 @@ describe("resolvePdsEndpoint", () => {
   });
 });
 ```
-Run: `pnpm --filter @luminance/atproto test` — Expected: FAIL (modules missing).
+Run: `pnpm --filter @openphotos/atproto test` — Expected: FAIL (modules missing).
 
 - [ ] **Step 3: Implement** — `packages/atproto/src/safe-fetch.ts`:
 ```ts
@@ -612,7 +612,7 @@ export async function safeJsonFetch(url: string): Promise<unknown> {
   return res.json();
 }
 ```
-Add dep: `pnpm --filter @luminance/atproto add ipaddr.js`.
+Add dep: `pnpm --filter @openphotos/atproto add ipaddr.js`.
 
 `packages/atproto/src/identity.ts`:
 ```ts
@@ -967,12 +967,12 @@ Export from `index.ts`.
 - Consumes: all mappers, `createTestDb`, db tables.
 - Produces: `Indexer` class with `handleEvent(evt: JetstreamEvent): Promise<void>` and `applyPhotoRows(rows: MappedPhoto[]): Promise<void>`; `JetstreamEvent` type: `{ did: string; time_us: number; kind: "commit" | "identity" | "account"; commit?: { operation: "create" | "update" | "delete"; collection: string; rkey: string; cid?: string; record?: unknown }; identity?: { handle?: string }; account?: { active: boolean; status?: string } }`.
 
-- [ ] **Step 1: Package** — name `ingestor`, deps: `@luminance/db@workspace:*`, `@luminance/atproto@workspace:*`, `@luminance/lexicons@workspace:*`, `ws`; devDeps `@types/ws`. Scripts: `build: tsc`, `start: node dist/main.js`, `test: vitest run`, `typecheck`.
+- [ ] **Step 1: Package** — name `ingestor`, deps: `@openphotos/db@workspace:*`, `@openphotos/atproto@workspace:*`, `@openphotos/lexicons@workspace:*`, `ws`; devDeps `@types/ws`. Scripts: `build: tsc`, `start: node dist/main.js`, `test: vitest run`, `typecheck`.
 
 - [ ] **Step 2: Failing indexer tests** — `indexer.test.ts` (PGlite; the behavioral heart of the AppView — spec §9):
 ```ts
 import { describe, it, expect, beforeEach } from "vitest";
-import { createTestDb, photos, photographers, tombstones, photoOverrides } from "@luminance/db";
+import { createTestDb, photos, photographers, tombstones, photoOverrides } from "@openphotos/db";
 import { Indexer } from "./indexer.js";
 
 const DID = "did:plc:kevin";
@@ -1034,12 +1034,12 @@ Run — Expected: FAIL.
 - [ ] **Step 3: Implement** — `apps/ingestor/src/indexer.ts`:
 ```ts
 import { eq, inArray, sql } from "drizzle-orm";
-import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@luminance/db";
+import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@openphotos/db";
 import {
   mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile,
   mapGrainRecord, GRAIN_COLLECTIONS, type Ctx, type MappedPhoto, type MappedSeries,
-} from "@luminance/atproto";
-import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
+} from "@openphotos/atproto";
+import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@openphotos/lexicons";
 
 export interface JetstreamEvent {
   did: string; time_us: number; kind: "commit" | "identity" | "account";
@@ -1169,7 +1169,7 @@ export class Indexer {
 ```ts
 import { describe, it, expect, afterEach } from "vitest";
 import { WebSocketServer } from "ws";
-import { createTestDb, ingestCursors } from "@luminance/db";
+import { createTestDb, ingestCursors } from "@openphotos/db";
 import { JetstreamConsumer } from "./jetstream.js";
 
 let wss: WebSocketServer; let consumer: JetstreamConsumer;
@@ -1229,7 +1229,7 @@ Run — Expected: FAIL.
 ```ts
 import WebSocket from "ws";
 import { eq } from "drizzle-orm";
-import { ingestCursors, type Db } from "@luminance/db";
+import { ingestCursors, type Db } from "@openphotos/db";
 import type { JetstreamEvent } from "./indexer.js";
 
 interface Opts {
@@ -1327,7 +1327,7 @@ export class JetstreamConsumer {
 - [ ] **Step 1: Failing tests** — `backfill.test.ts` (mock PDS via injected `fetchJson`; includes the **delete-race regression**, spec §13):
 ```ts
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers, tombstones } from "@luminance/db";
+import { createTestDb, photos, photographers, tombstones } from "@openphotos/db";
 import { eq } from "drizzle-orm";
 import { Indexer } from "./indexer.js";
 import { runBackfill } from "./backfill.js";
@@ -1379,9 +1379,9 @@ Run — Expected: FAIL.
 - [ ] **Step 2: Implement** — `backfill.ts`:
 ```ts
 import { eq, like } from "drizzle-orm";
-import { photographers, tombstones, type Db } from "@luminance/db";
-import { resolvePdsEndpoint as realResolve, safeJsonFetch, mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile, mapGrainRecord, GRAIN_COLLECTIONS, type Ctx } from "@luminance/atproto";
-import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
+import { photographers, tombstones, type Db } from "@openphotos/db";
+import { resolvePdsEndpoint as realResolve, safeJsonFetch, mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile, mapGrainRecord, GRAIN_COLLECTIONS, type Ctx } from "@openphotos/atproto";
+import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@openphotos/lexicons";
 import type { Indexer } from "./indexer.js";
 
 const MAX_PER_COLLECTION = 5000; // spec §9
@@ -1466,9 +1466,9 @@ Note: source-toggle filtering happens inside `Indexer.handleEvent`/mapper applic
 **Interfaces:**
 - Produces: `getDb()` singleton (`apps/web/lib/db.ts`); `env` object validating `DATABASE_URL`, `PUBLIC_URL`, `SESSION_SECRET`, `ADMIN_DIDS` at boot. Route-name rule: **every new top-level route segment must be dotless** (global constraint).
 
-- [ ] **Step 1: Scaffold.** `pnpm create next-app@latest apps/web --ts --app --tailwind --no-eslint --no-src-dir --import-alias "@/*"`, then set package name `web`, add `@luminance/db@workspace:*`, `@luminance/atproto@workspace:*`, `@luminance/lexicons@workspace:*`. `lib/db.ts`:
+- [ ] **Step 1: Scaffold.** `pnpm create next-app@latest apps/web --ts --app --tailwind --no-eslint --no-src-dir --import-alias "@/*"`, then set package name `web`, add `@openphotos/db@workspace:*`, `@openphotos/atproto@workspace:*`, `@openphotos/lexicons@workspace:*`. `lib/db.ts`:
 ```ts
-import { createDb, type Db } from "@luminance/db";
+import { createDb, type Db } from "@openphotos/db";
 import { env } from "./env";
 let db: Db | undefined;
 export function getDb(): Db { return (db ??= createDb(env.DATABASE_URL)); }
@@ -1502,7 +1502,7 @@ export const env = {
 - [ ] **Step 1: Failing tests** — `image-proxy.test.ts` (spec §11/§13 security regression fixtures):
 ```ts
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers } from "@luminance/db";
+import { createTestDb, photos, photographers } from "@openphotos/db";
 import { proxyImage } from "./image-proxy";
 
 const seed = async (db: any) => {
@@ -1548,8 +1548,8 @@ Run: `pnpm --filter web test` (add vitest config to web) — Expected: FAIL.
 ```ts
 import { or, eq, and } from "drizzle-orm";
 import sharp from "sharp";
-import { photos, photographers, type Db } from "@luminance/db";
-import { resolvePdsEndpoint, safeFetch } from "@luminance/atproto";
+import { photos, photographers, type Db } from "@openphotos/db";
+import { resolvePdsEndpoint, safeFetch } from "@openphotos/atproto";
 
 export const PRESETS = { thumb: 512, feed: 1024, full: 2048 } as const;
 export type Preset = keyof typeof PRESETS;
@@ -1618,7 +1618,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ did: str
 - [ ] **Step 1: Failing tests** — `registration.test.ts` (business logic only; OAuth wire protocol is NOT unit-tested — spec §13 stubs identity):
 ```ts
 import { describe, it, expect } from "vitest";
-import { createTestDb, photographers, photoOverrides, photos } from "@luminance/db";
+import { createTestDb, photographers, photoOverrides, photos } from "@openphotos/db";
 import { eq } from "drizzle-orm";
 import { completeRegistration, setHiddenForDid, deregisterDid } from "./registration";
 
@@ -1660,7 +1660,7 @@ Run — Expected: FAIL.
 - [ ] **Step 2: Implement logic** — `apps/web/lib/registration.ts`:
 ```ts
 import { and, eq } from "drizzle-orm";
-import { photographers, photos, photoOverrides, type Db } from "@luminance/db";
+import { photographers, photos, photoOverrides, type Db } from "@openphotos/db";
 
 export async function completeRegistration(db: Db, o: { did: string; handle: string; includeBsky: boolean; includeGrain: boolean }) {
   await db.insert(photographers)
@@ -1687,7 +1687,7 @@ export async function adminTakedown(db: Db, atUri: string, mediaIndex: number, r
 import { NodeOAuthClient, type NodeSavedState, type NodeSavedSession } from "@atproto/oauth-client-node";
 import { JoseKey } from "@atproto/jwk-jose";
 import { eq } from "drizzle-orm";
-import { oauthStates, oauthSessions, type Db } from "@luminance/db";
+import { oauthStates, oauthSessions, type Db } from "@openphotos/db";
 import { env } from "./env";
 
 export async function getOAuthClient(db: Db) {
@@ -1740,7 +1740,7 @@ Add dep `@atproto/jwk-jose`. Generate key: `node -e "const {JoseKey}=await impor
 - [ ] **Step 1: Failing query tests** — `queries.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers, photoOverrides } from "@luminance/db";
+import { createTestDb, photos, photographers, photoOverrides } from "@openphotos/db";
 import { getPhotoRecord, getPhotographerByHandle } from "./queries";
 
 describe("queries", () => {
@@ -1765,7 +1765,7 @@ Run — Expected: FAIL.
 - [ ] **Step 2: Implement queries** — `lib/queries.ts`:
 ```ts
 import { and, eq, asc, sql } from "drizzle-orm";
-import { photos, photographers, series, seriesPhotos, photoOverrides, type Db } from "@luminance/db";
+import { photos, photographers, series, seriesPhotos, photoOverrides, type Db } from "@openphotos/db";
 
 export const LABEL_BLUR = ["nudity", "sexual", "porn", "graphic-media"];
 
@@ -1859,10 +1859,10 @@ jobs:
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { TestNetworkNoAppView } from "@atproto/dev-env";
 import { AtpAgent } from "@atproto/api";
-import { createTestDb, photographers, photos } from "@luminance/db";
+import { createTestDb, photographers, photos } from "@openphotos/db";
 import { Indexer } from "../indexer.js";
 import { runBackfill } from "../backfill.js";
-import { LUMINANCE_PHOTO } from "@luminance/lexicons";
+import { LUMINANCE_PHOTO } from "@openphotos/lexicons";
 
 let network: TestNetworkNoAppView; let agent: AtpAgent; let did: string;
 

@@ -1,13 +1,13 @@
 import { and, eq, inArray, like, ne, notInArray } from "drizzle-orm";
-import { photographers, photos, series, seriesPhotos, tombstones, type Db } from "@luminance/db";
+import { photographers, photos, series, seriesPhotos, tombstones, type Db } from "@openphotos/db";
 import {
   resolvePdsEndpoint as realResolve, safeJsonFetch, mapBskyPost,
   mapGrainRecord, GRAIN_COLLECTIONS, mapOpencontentPhotograph, type Ctx,
-} from "@luminance/atproto";
+} from "@openphotos/atproto";
 import {
   LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
   OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
-} from "@luminance/lexicons";
+} from "@openphotos/lexicons";
 import type { Indexer } from "./indexer.js";
 import { warmNewPhotos } from "./warm-cache.js";
 

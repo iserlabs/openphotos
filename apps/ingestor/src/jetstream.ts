@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import { eq, sql } from "drizzle-orm";
-import { ingestCursors, type Db } from "@luminance/db";
+import { ingestCursors, type Db } from "@openphotos/db";
 import type { JetstreamEvent } from "./indexer.js";
 
 /** A handler-failed event is replayed (reconnect-from-cursor) at most this

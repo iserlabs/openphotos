@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { XRPCError, type Agent } from "@atproto/api";
-import { createTestDb, photographers, interactions, notifications, type Db } from "@luminance/db";
-import { COMMENT_MAX_GRAPHEMES } from "@luminance/atproto";
+import { createTestDb, photographers, interactions, notifications, type Db } from "@openphotos/db";
+import { COMMENT_MAX_GRAPHEMES } from "@openphotos/atproto";
 import {
   routeInteraction,
   likePhoto,

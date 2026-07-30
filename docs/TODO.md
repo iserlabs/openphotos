@@ -1,4 +1,6 @@
-# luminance.social — Task List
+# OpenPhotos (luminance.social) — Task List
+
+_Renamed from Luminance → OpenPhotos 2026-07-30; repo is now `iserlabs/openphotos`. Protocol identifiers (`social.luminance.*` NSIDs, the `luminance.social` domain, Fly app `luminance-ingestor`, the `luminance` photo-source enum) intentionally keep the old name — they are published/live._
 
 _Last updated: 2026-07-21. Foundation is merged to main but nothing is deployed yet._
 
@@ -6,7 +8,7 @@ _Last updated: 2026-07-21. Foundation is merged to main but nothing is deployed 
 
 Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 
-- [x] Create GitHub repo + push main — **iserlabs/luminance-social** (2026-07-22; CI green on main, Renovate auto-configured)
+- [x] Create GitHub repo + push main — **iserlabs/luminance-social** (now `iserlabs/openphotos`; 2026-07-22; CI green on main, Renovate auto-configured)
 - [x] Neon Postgres provisioned via Vercel Marketplace (`luminance-db`, iad1, DATABASE prefix); migrations 0000+0001 applied; feed renders healthy empty state (2026-07-22). ADMIN_DIDS set to Kevin's DID (kevinleephotos.bsky.social)
 - [x] Vercel project linked — **iser-labs/luminance-social**, rootDirectory `apps/web`, live at https://luminance-social.vercel.app (2026-07-22). Env set: PUBLIC_URL, SESSION_SECRET, OAUTH_JWK_1 (prod+preview). Still needed: DATABASE_URL (after DB), ADMIN_DIDS (Kevin's DID)
 - [x] Fly: `luminance-ingestor` live in iad (personal org — no iserlabs Fly org exists; transferable later), scaled to 1 machine, health passing, DATABASE_URL (unpooled) secret set; FLY_API_TOKEN in GitHub secrets for auto-deploy (2026-07-22). Note: always-on ingestor keeps Neon compute awake — free tier is 100 CU-hrs/mo, expect to outgrow it in ~2 weeks

@@ -1,6 +1,6 @@
 # Ingestor: Jetstream firehose consumer + AppView indexer.
 # Built from the monorepo root so pnpm/turbo can resolve workspace deps
-# (@luminance/db, @luminance/atproto, @luminance/lexicons).
+# (@openphotos/db, @openphotos/atproto, @openphotos/lexicons).
 #
 # Multi-stage: the build stage installs the full dependency graph and compiles
 # TypeScript; the runtime stage carries ONLY production dependencies plus the

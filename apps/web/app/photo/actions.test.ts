@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createTestDb, photographers, type Db } from "@luminance/db";
+import { createTestDb, photographers, type Db } from "@openphotos/db";
 import type { Agent } from "@atproto/api";
 import { likeActionCore, unlikeActionCore, commentActionCore, deleteCommentActionCore } from "./actions";
 

@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
-import { photographers, photos, engagement, interactions, oauthStates, pushNotification, ABSORPTION_GRACE_MS, type Db } from "@luminance/db";
-import type { PostView, ThreadView, LikeView, ActorView } from "@luminance/atproto";
-import { graphemeSlice } from "@luminance/atproto";
+import { photographers, photos, engagement, interactions, oauthStates, pushNotification, ABSORPTION_GRACE_MS, type Db } from "@openphotos/db";
+import type { PostView, ThreadView, LikeView, ActorView } from "@openphotos/atproto";
+import { graphemeSlice } from "@openphotos/atproto";
 import { Sentry, sentryEnabled } from "./sentry.js";
 
 // ---- Injected AppView surface ---------------------------------------------

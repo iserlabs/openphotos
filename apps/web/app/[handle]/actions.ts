@@ -1,6 +1,6 @@
 "use server";
 
-import type { Db } from "@luminance/db";
+import type { Db } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { followPhotographer, unfollowPhotographer, restoreAgent, resolveActorAvatar, RateLimitError } from "@/lib/interactions";

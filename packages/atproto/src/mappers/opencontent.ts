@@ -9,7 +9,7 @@ import { clampSortAt } from "./luminance.js";
 //   existing `exif` jsonb bucket instead of adding a column for one field.
 // social.opencontent.collection (record): { title (required), description?,
 //   items: strongRef[] (required; array order IS display order), cover?: strongRef, createdAt (required) }
-//   — like a Luminance series, the items[] array is the authoritative, ordered membership list.
+//   — like a OpenPhotos series, the items[] array is the authoritative, ordered membership list.
 
 function isPositiveInt(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n) && n >= 1;

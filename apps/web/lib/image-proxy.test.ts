@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers, photoOverrides } from "@luminance/db";
+import { createTestDb, photos, photographers, photoOverrides } from "@openphotos/db";
 import { proxyImage } from "./image-proxy";
 
 const seed = async (db: any) => {

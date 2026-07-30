@@ -1,6 +1,6 @@
-# @luminance/web
+# @openphotos/web
 
-Next.js 16 (App Router) hub app for Luminance — the public site, feed,
+Next.js 16 (App Router) hub app for OpenPhotos — the public site, feed,
 profile/photo pages, registration, OAuth, and the image proxy.
 
 ## Development

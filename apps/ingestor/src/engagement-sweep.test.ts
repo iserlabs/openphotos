@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDb, photographers, photos, engagement, interactions, notifications, recordInteraction } from "@luminance/db";
-import type { PostView, ThreadView, LikeView, ActorView } from "@luminance/atproto";
+import { createTestDb, photographers, photos, engagement, interactions, notifications, recordInteraction } from "@openphotos/db";
+import type { PostView, ThreadView, LikeView, ActorView } from "@openphotos/atproto";
 import { runEngagementSweep, startEngagementSweep, sweepOnce, governedIntervalMs, isRateLimited, type EngagementAppView } from "./engagement-sweep.js";
 
 const KEVIN = "did:plc:kevin";
@@ -506,7 +506,7 @@ describe("429 backoff + janitor (fast-follows)", () => {
 
   it("janitor prunes old soft-deleted follow rows and stale oauth states, keeps fresh ones", async () => {
     const db = await createTestDb();
-    const { oauthStates } = await import("@luminance/db");
+    const { oauthStates } = await import("@openphotos/db");
     const dayAndBitAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
     const recent = new Date(Date.now() - 60 * 1000);
 

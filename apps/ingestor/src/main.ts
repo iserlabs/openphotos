@@ -1,11 +1,11 @@
 import { Sentry, sentryEnabled } from "./sentry.js"; // must be imported first: initializes Sentry before other modules load
 import { ne, eq } from "drizzle-orm";
-import { createDb, photographers, ingestCursors, type Db } from "@luminance/db";
+import { createDb, photographers, ingestCursors, type Db } from "@openphotos/db";
 import {
   LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
   OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
-} from "@luminance/lexicons";
-import { GRAIN_COLLECTIONS, AppView } from "@luminance/atproto";
+} from "@openphotos/lexicons";
+import { GRAIN_COLLECTIONS, AppView } from "@openphotos/atproto";
 import { config } from "./config.js";
 import { Indexer } from "./indexer.js";
 import { JetstreamConsumer } from "./jetstream.js";

@@ -298,9 +298,9 @@ Caddyfile: `pds.{$DOMAIN} { reverse_proxy pds:3000 }` and `{$DOMAIN} { reverse_p
 - Modify: `packages/db/src/schema.ts` (pgEnum `photo_source` values + add `"opencontent"`); generated `packages/db/migrations/0006_*.sql`
 - Test: `packages/db/src/schema-enum.test.ts`
 
-- [ ] **Step 1:** Add the enum value in `schema.ts`; `pnpm --filter @luminance/db exec drizzle-kit generate --name opencontent_source`. Verify the generated SQL is **exactly one statement**: `ALTER TYPE "public"."photo_source" ADD VALUE 'opencontent';` — the transaction-trap mitigation is *isolation*: this migration contains nothing else, and no same-transaction usage exists (first use is runtime inserts long after commit). If drizzle bundles extra statements, hand-split the file.
+- [ ] **Step 1:** Add the enum value in `schema.ts`; `pnpm --filter @openphotos/db exec drizzle-kit generate --name opencontent_source`. Verify the generated SQL is **exactly one statement**: `ALTER TYPE "public"."photo_source" ADD VALUE 'opencontent';` — the transaction-trap mitigation is *isolation*: this migration contains nothing else, and no same-transaction usage exists (first use is runtime inserts long after commit). If drizzle bundles extra statements, hand-split the file.
 - [ ] **Step 2: Failing test** — PGlite (real PG≥16 semantics): run migrations via `createTestDb()`, then `INSERT` a photos row with `source: "opencontent"` and read it back.
-- [ ] **Step 3:** Run `pnpm --filter @luminance/db test` → PASS. Apply to production Neon **before merge** (the deploy-race rule proven in fast-follows): `DATABASE_URL=<unpooled> pnpm --filter @luminance/db exec drizzle-kit migrate`.
+- [ ] **Step 3:** Run `pnpm --filter @openphotos/db test` → PASS. Apply to production Neon **before merge** (the deploy-race rule proven in fast-follows): `DATABASE_URL=<unpooled> pnpm --filter @openphotos/db exec drizzle-kit migrate`.
 - [ ] **Step 4: Commit** — `feat(db): opencontent photo source (isolated single-statement enum migration)`
 
 ### Task B2: opencontent mappers + watched collections

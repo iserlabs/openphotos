@@ -1,4 +1,4 @@
-import { createDb, type Db } from "@luminance/db";
+import { createDb, type Db } from "@openphotos/db";
 import { env } from "./env";
 
 let db: Db | undefined;

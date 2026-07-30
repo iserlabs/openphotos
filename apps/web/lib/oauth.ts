@@ -1,8 +1,8 @@
 import { NodeOAuthClient, type NodeSavedSession, type NodeSavedState } from "@atproto/oauth-client-node";
 import { JoseKey } from "@atproto/jwk-jose";
 import { eq } from "drizzle-orm";
-import { oauthStates, oauthSessions, type Db } from "@luminance/db";
-import { resolvePdsEndpoint, safeJsonFetch } from "@luminance/atproto";
+import { oauthStates, oauthSessions, type Db } from "@openphotos/db";
+import { resolvePdsEndpoint, safeJsonFetch } from "@openphotos/atproto";
 import { env } from "./env";
 import { encodeAppState, type AppState } from "./oauth-state";
 
@@ -17,7 +17,7 @@ function clientMetadata() {
   const base = env.PUBLIC_URL;
   return {
     client_id: `${base}/oauth/client-metadata.json`,
-    client_name: "Luminance",
+    client_name: "OpenPhotos",
     client_uri: base,
     redirect_uris: [`${base}/oauth/callback`] as [string],
     grant_types: ["authorization_code", "refresh_token"] as ["authorization_code", "refresh_token"],
@@ -166,7 +166,7 @@ export async function getPublicJwks() {
 /**
  * Resolve a DID's current handle via `com.atproto.repo.describeRepo` on its own
  * PDS (located through the DID document). Uses the SSRF-guarded fetch from
- * `@luminance/atproto`. Used at registration time to fill the photographer's
+ * `@openphotos/atproto`. Used at registration time to fill the photographer's
  * handle column.
  */
 export async function resolveHandle(did: string): Promise<string> {

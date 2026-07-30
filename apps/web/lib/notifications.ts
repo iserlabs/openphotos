@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { photographers, markRead, markAllRead, type Db } from "@luminance/db";
+import { photographers, markRead, markAllRead, type Db } from "@openphotos/db";
 
 /** Registered-photographer check — only photographers ever receive notifications. */
 async function isPhotographerDid(db: Db, did: string): Promise<boolean> {

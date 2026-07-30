@@ -1,5 +1,5 @@
 import { and, eq, asc, sql } from "drizzle-orm";
-import { photos, photographers, series, seriesPhotos, photoOverrides, type Db } from "@luminance/db";
+import { photos, photographers, series, seriesPhotos, photoOverrides, type Db } from "@openphotos/db";
 
 export const LABEL_BLUR = ["nudity", "sexual", "porn", "graphic-media"];
 

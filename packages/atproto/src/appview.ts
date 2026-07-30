@@ -1,7 +1,7 @@
 import { safeJsonFetch } from "./safe-fetch.js";
 
 // ---- Structural types ----------------------------------------------------
-// These declare only the fields Luminance actually reads off Bluesky's public
+// These declare only the fields OpenPhotos actually reads off Bluesky's public
 // AppView responses — not the full app.bsky.* lexicon shapes. Where the real
 // lexicon uses a union (e.g. threadViewPost's `replies` also permits
 // notFoundPost/blockedPost), we collapse to the shape we care about since we

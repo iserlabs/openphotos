@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { WebSocketServer } from "ws";
-import { createTestDb, ingestCursors } from "@luminance/db";
+import { createTestDb, ingestCursors } from "@openphotos/db";
 import { JetstreamConsumer } from "./jetstream.js";
 
 let wss: WebSocketServer; let consumer: JetstreamConsumer;

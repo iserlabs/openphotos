@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photographers, type Db } from "@luminance/db";
+import { createTestDb, photographers, type Db } from "@openphotos/db";
 import { followActionCore, unfollowActionCore } from "./actions";
 
 const VIEWER = "did:plc:viewer";

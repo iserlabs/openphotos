@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll } from "vitest";
 import { JoseKey } from "@atproto/jwk-jose";
-import type { Db } from "@luminance/db";
+import type { Db } from "@openphotos/db";
 import { getOAuthClient, getClientMetadata } from "./oauth";
 
 // getOAuthClient() (via clientMetadata()) reads env.PUBLIC_URL/env.OAUTH_JWK_1

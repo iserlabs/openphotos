@@ -158,7 +158,7 @@ describe("notifications", () => {
   });
 });
 ```
-Run: `pnpm --filter @luminance/db test` — FAIL (social.js missing).
+Run: `pnpm --filter @openphotos/db test` — FAIL (social.js missing).
 
 - [ ] **Step 3: Implement** `packages/db/src/social.ts`:
 
@@ -236,7 +236,7 @@ export async function markAllRead(db: Db, recipientDid: string) {
 ```
 Note the delta walk is per-row in JS over a single query's results — acceptable and clear; keep it (the "one grouped query" constraint is about avoiding per-tile queries, satisfied).
 
-- [ ] **Step 4: GREEN + typecheck + commit** — `pnpm --filter @luminance/db test`, root `pnpm typecheck && pnpm build`. Commit: `feat(db): social tables + count-formula and notification helpers`.
+- [ ] **Step 4: GREEN + typecheck + commit** — `pnpm --filter @openphotos/db test`, root `pnpm typecheck && pnpm build`. Commit: `feat(db): social tables + count-formula and notification helpers`.
 
 ---
 

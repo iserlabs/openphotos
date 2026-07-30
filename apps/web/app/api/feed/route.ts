@@ -1,4 +1,4 @@
-import { feedPage } from "@luminance/db";
+import { feedPage } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 
 // Live DB per request; JSON mirror of the same keyset feed the homepage

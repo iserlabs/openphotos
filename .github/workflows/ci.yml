@@ -20,6 +20,6 @@ jobs:
           git add -A -- packages/lexicons packages/db/migrations
           git diff --cached --exit-code -- packages/lexicons packages/db/migrations
       - name: run db migrations
-        run: pnpm --filter @luminance/db exec drizzle-kit migrate
+        run: pnpm --filter @openphotos/db exec drizzle-kit migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

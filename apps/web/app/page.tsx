@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { feedPage, engagementFor } from "@luminance/db";
+import { feedPage, engagementFor } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { PhotoGrid } from "@/components/photo-grid";
 
@@ -27,7 +27,7 @@ export default async function Home({
           Feed coming soon
         </h1>
         <p className="mt-4 max-w-md text-zinc-400">
-          The Luminance feed will surface photography indexed straight from
+          The OpenPhotos feed will surface photography indexed straight from
           photographers&apos; own PDS records across the network.
         </p>
       </div>

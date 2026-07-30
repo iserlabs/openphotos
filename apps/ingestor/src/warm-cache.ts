@@ -1,5 +1,5 @@
 import { and, desc, eq, gt } from "drizzle-orm";
-import { photos, type Db } from "@luminance/db";
+import { photos, type Db } from "@openphotos/db";
 
 /**
  * Cold-path killer for the image proxy: the first request for a fresh photo

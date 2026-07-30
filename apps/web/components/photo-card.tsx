@@ -12,7 +12,7 @@ import Link from "next/link";
  * button must NOT be nested inside the tile's `<Link>` (no interactive
  * element may nest inside another). The sensitivity intersection against
  * `LABEL_BLUR` is computed by callers (server components) and passed down
- * as a plain boolean — this file stays free of any `@luminance/db`/drizzle
+ * as a plain boolean — this file stays free of any `@openphotos/db`/drizzle
  * imports.
  */
 export function SensitiveImage({

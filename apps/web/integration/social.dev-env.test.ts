@@ -10,7 +10,7 @@ import {
   engagementFor,
   findInteraction,
   type Db,
-} from "@luminance/db";
+} from "@openphotos/db";
 import {
   likePhoto,
   unlikePhoto,

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDb, photos, photographers, tombstones, photoOverrides, series, seriesPhotos } from "@luminance/db";
-import { OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@luminance/lexicons";
+import { createTestDb, photos, photographers, tombstones, photoOverrides, series, seriesPhotos } from "@openphotos/db";
+import { OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@openphotos/lexicons";
 import { Indexer } from "./indexer.js";
 
 const DID = "did:plc:kevin";

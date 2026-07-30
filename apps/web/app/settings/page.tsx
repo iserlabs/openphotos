@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { and, count, desc, eq } from "drizzle-orm";
-import { photographers, photos, photoOverrides } from "@luminance/db";
+import { photographers, photos, photoOverrides } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { setPhotoHidden, updateSources, deregister, adminTakedown, refreshPhotos } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Settings — Luminance",
+  title: "Settings — OpenPhotos",
 };
 
 // Session + live DB per request; never cached.
@@ -261,7 +261,7 @@ export default async function SettingsPage({
       <section className="mt-12 border-t border-zinc-800 pt-8">
         <h2 className="text-lg font-medium text-red-300">Deregister</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Removes your photos from the Luminance index. Your records stay on your
+          Removes your photos from the OpenPhotos index. Your records stay on your
           PDS, untouched — you can register again any time.
         </p>
         <form action={deregister} className="mt-4 space-y-3">

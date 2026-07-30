@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { OPENCONTENT_COLLECTION } from "@luminance/lexicons";
-import { GRAIN_GALLERY } from "@luminance/atproto";
+import { OPENCONTENT_COLLECTION } from "@openphotos/lexicons";
+import { GRAIN_GALLERY } from "@openphotos/atproto";
 import { getDb } from "@/lib/db";
 import { getPhotographerByHandle, getSeries, buildAtUri } from "@/lib/queries";
 import { PhotoGrid } from "@/components/photo-grid";
-import type { Db } from "@luminance/db";
+import type { Db } from "@openphotos/db";
 
 // Live DB per request.
 export const dynamic = "force-dynamic";

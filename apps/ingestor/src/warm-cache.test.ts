@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers } from "@luminance/db";
+import { createTestDb, photos, photographers } from "@openphotos/db";
 import { warmNewPhotos } from "./warm-cache.js";
 
 const DID = "did:plc:kevin";

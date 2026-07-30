@@ -4,7 +4,7 @@ import { sanitizeReturnTo } from "@/lib/oauth-state";
 import { startLogin } from "@/app/register/actions";
 
 export const metadata: Metadata = {
-  title: "Sign in — Luminance",
+  title: "Sign in — OpenPhotos",
 };
 
 const ERRORS: Record<string, string> = {
@@ -34,7 +34,7 @@ export default async function LoginPage({
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Sign in</h1>
       <p className="mt-4 text-sm leading-relaxed text-zinc-400">
         Sign in with your AT Protocol account to follow photographers and
-        personalize your feed. Luminance never sees your password.
+        personalize your feed. OpenPhotos never sees your password.
       </p>
 
       {message ? (

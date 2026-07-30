@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { oauthSessions } from "@luminance/db";
+import { oauthSessions } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getIronSessionData } from "@/lib/session";
 

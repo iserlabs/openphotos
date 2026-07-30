@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { photographers, notificationsPage, unreadCount } from "@luminance/db";
+import { photographers, notificationsPage, unreadCount } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { safeExternalHref } from "@/lib/safe-href";
@@ -12,7 +12,7 @@ import { MarkReadOnMount } from "@/components/mark-read-on-mount";
 import { markAllReadAction } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Notifications — Luminance",
+  title: "Notifications — OpenPhotos",
 };
 
 // Session + live DB per request — unread state must never be cached.

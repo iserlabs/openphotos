@@ -4,7 +4,7 @@ import { getSession } from "@/lib/session";
 import { saveSources } from "../actions";
 
 export const metadata: Metadata = {
-  title: "Choose sources — Luminance",
+  title: "Choose sources — OpenPhotos",
 };
 
 export default async function SourcesPage() {
@@ -17,7 +17,7 @@ export default async function SourcesPage() {
         Choose your sources
       </h1>
       <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-        Pick which of your records Luminance should index for{" "}
+        Pick which of your records OpenPhotos should index for{" "}
         <span className="font-medium text-zinc-200">
           {session.handle ?? session.did}
         </span>

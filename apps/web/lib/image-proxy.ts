@@ -1,7 +1,7 @@
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import sharp from "sharp";
-import { photos, photographers, photoOverrides, type Db } from "@luminance/db";
-import { resolvePdsEndpoint, safeFetch } from "@luminance/atproto";
+import { photos, photographers, photoOverrides, type Db } from "@openphotos/db";
+import { resolvePdsEndpoint, safeFetch } from "@openphotos/atproto";
 
 // `grid` exists for high-DPR phones: a 412px viewport at DPR 1.75 needs
 // ~720 device px, and without it the srcset jumps 512 → 1024, forcing the

@@ -1,14 +1,14 @@
 import { eq, inArray, or, sql } from "drizzle-orm";
-import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@luminance/db";
+import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@openphotos/db";
 import {
   mapLuminanceProfile, mapBskyPost, mapBskyProfile,
   mapGrainRecord, GRAIN_COLLECTIONS, mapOpencontentPhotograph, mapOpencontentCollection,
   type Ctx, type MappedPhoto, type MappedSeries,
-} from "@luminance/atproto";
+} from "@openphotos/atproto";
 import {
   LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
   OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
-} from "@luminance/lexicons";
+} from "@openphotos/lexicons";
 
 export interface JetstreamEvent {
   did: string; time_us: number; kind: "commit" | "identity" | "account";

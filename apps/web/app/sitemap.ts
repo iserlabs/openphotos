@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { photographers, photos, photoOverrides } from "@luminance/db";
+import { photographers, photos, photoOverrides } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { splitAtUri } from "@/lib/queries";

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import { eq } from "drizzle-orm";
-import { photographers, unreadCount } from "@luminance/db";
+import { photographers, unreadCount } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { Bell } from "@/components/bell";
@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Luminance",
+  title: "OpenPhotos",
   description: "An open, ATProto-native hub for photography.",
 };
 
@@ -60,7 +60,7 @@ export default async function RootLayout({
         <header className="border-b border-zinc-800">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
             <Link href="/" className="text-lg font-semibold tracking-tight text-zinc-100">
-              Luminance
+              OpenPhotos
             </Link>
             <nav className="flex items-center gap-6 text-sm text-zinc-400">
               <Link href="/about" className="transition-colors hover:text-zinc-100">
@@ -104,7 +104,7 @@ export default async function RootLayout({
 
         <footer className="border-t border-zinc-800">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6 text-sm text-zinc-500">
-            <span>&copy; {new Date().getFullYear()} Luminance</span>
+            <span>&copy; {new Date().getFullYear()} OpenPhotos</span>
             <Link href="/dmca" className="transition-colors hover:text-zinc-100">
               DMCA
             </Link>

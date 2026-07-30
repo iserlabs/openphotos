@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photographers, pushNotification, unreadCount, notificationsPage, type Db } from "@luminance/db";
+import { createTestDb, photographers, pushNotification, unreadCount, notificationsPage, type Db } from "@openphotos/db";
 import { markReadFor, markAllReadFor } from "./notifications";
 
 const A = "did:plc:a";

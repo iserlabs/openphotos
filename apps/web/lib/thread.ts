@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { interactions, type Db } from "@luminance/db";
-import type { ThreadView } from "@luminance/atproto";
+import { interactions, type Db } from "@openphotos/db";
+import type { ThreadView } from "@openphotos/atproto";
 
 /**
  * A single flattened comment row, ready to render. `depth` is 0 for a direct

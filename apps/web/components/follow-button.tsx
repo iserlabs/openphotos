@@ -23,7 +23,7 @@ import { SESSION_EXPIRED_ERROR, loginHref } from "@/lib/interaction-errors";
  * Bluesky state — same honest seam as the like button: a follow made
  * directly in the Bluesky app will show up in the profile's follower count
  * (AppView-sourced) before this button reflects it. Only a follow/unfollow
- * made through Luminance itself updates this component's state, and
+ * made through OpenPhotos itself updates this component's state, and
  * `router.refresh()` re-derives `initialFollowing` from the DB afterward.
  */
 export function FollowButton({

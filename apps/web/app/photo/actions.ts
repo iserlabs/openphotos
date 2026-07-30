@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
-import type { Db } from "@luminance/db";
+import type { Db } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { getPhotoRecord } from "@/lib/queries";

@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@luminance/atproto": "workspace:*",
-    "@luminance/db": "workspace:*",
-    "@luminance/lexicons": "workspace:*",
+    "@openphotos/atproto": "workspace:*",
+    "@openphotos/db": "workspace:*",
+    "@openphotos/lexicons": "workspace:*",
     "@sentry/node": "^10.67.0",
     "drizzle-orm": "^0.45.2",
     "ws": "^8.18.0"

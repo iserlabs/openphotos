@@ -3,8 +3,8 @@ import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { unstable_cache } from "next/cache";
-import { AppView, type ThreadView } from "@luminance/atproto";
-import { engagementFor, findInteraction } from "@luminance/db";
+import { AppView, type ThreadView } from "@openphotos/atproto";
+import { engagementFor, findInteraction } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
@@ -90,7 +90,7 @@ export async function generateMetadata({
   const description = first.alt || first.caption || undefined;
 
   return {
-    title: `${title} — Luminance`,
+    title: `${title} — OpenPhotos`,
     description,
     openGraph: {
       title,
@@ -117,7 +117,7 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
       : safeExternalHref(photographer.website);
 
   // Interactions (likes/comments) only exist for bsky-sourced photos — a real
-  // app.bsky.feed.post backs them. Luminance/grain sources get a disabled row
+  // app.bsky.feed.post backs them. OpenPhotos/grain sources get a disabled row
   // instead (spec §7/§10 — phase 3 fills this router branch).
   const routed = routeInteraction(items[0]);
   const session = await getSession();

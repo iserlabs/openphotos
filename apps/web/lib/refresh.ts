@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { photographers, type Db } from "@luminance/db";
+import { photographers, type Db } from "@openphotos/db";
 
 export type RefreshResult = { ok: boolean; error?: string; alreadyRunning?: boolean };
 

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { unstable_cache } from "next/cache";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { feedPage, engagementFor, findInteraction, photos, photoOverrides, series as seriesTable, seriesPhotos } from "@luminance/db";
-import { AppView } from "@luminance/atproto";
+import { feedPage, engagementFor, findInteraction, photos, photoOverrides, series as seriesTable, seriesPhotos } from "@openphotos/db";
+import { AppView } from "@openphotos/atproto";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
@@ -72,7 +72,7 @@ export async function generateMetadata({
   if (!photographer) return {};
 
   const title = photographer.displayName ?? photographer.handle;
-  const description = photographer.bio ?? `Photography by ${title} on Luminance.`;
+  const description = photographer.bio ?? `Photography by ${title} on OpenPhotos.`;
   const { items } = await feedPage(db, { limit: 1, did: photographer.did });
   const first = items[0];
   const images = first
@@ -80,7 +80,7 @@ export async function generateMetadata({
     : undefined;
 
   return {
-    title: `${title} — Luminance`,
+    title: `${title} — OpenPhotos`,
     description,
     openGraph: { title, description, images, type: "profile" },
   };
@@ -134,7 +134,7 @@ export default async function ProfilePage({
     .where(eq(seriesTable.did, photographer.did));
   const followerCountPromise = getFollowerCount(photographer.did);
   // Write-through truth (spec-honest seam, see FollowButton doc comment):
-  // reflects follows made through Luminance, not necessarily the live
+  // reflects follows made through OpenPhotos, not necessarily the live
   // Bluesky graph. Skipped entirely when signed out — nothing to look up.
   const viewerFollowPromise =
     session.did && !isOwnProfile ? findInteraction(db, session.did, "follow", photographer.did) : Promise.resolve(null);

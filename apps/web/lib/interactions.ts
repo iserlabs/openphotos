@@ -8,8 +8,8 @@ import {
   interactionWritesInWindow,
   pushNotification,
   type Db,
-} from "@luminance/db";
-import { AppView, buildLikeRecord, buildReplyRecord, buildFollowRecord, graphemeSlice } from "@luminance/atproto";
+} from "@openphotos/db";
+import { AppView, buildLikeRecord, buildReplyRecord, buildFollowRecord, graphemeSlice } from "@openphotos/atproto";
 import { getOAuthClient } from "./oauth";
 import { splitAtUri } from "./queries";
 import { SESSION_EXPIRED_ERROR } from "./interaction-errors";
@@ -256,7 +256,7 @@ export async function likePhoto(
     }
   } catch {
     // The PDS record exists; the sweep will reconcile it. Never crash here.
-    return { ok: false, error: "liked on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+    return { ok: false, error: "liked on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
   }
 
   return { ok: true };
@@ -329,7 +329,7 @@ export async function unlikePhoto(
     try {
       await softDeleteInteraction(db, existing.recordUri);
     } catch {
-      return { ok: false, error: "unliked on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+      return { ok: false, error: "unliked on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
     }
   }
 
@@ -443,7 +443,7 @@ export async function commentOnPhoto(
       });
     }
   } catch {
-    return { ok: false, error: "commented on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+    return { ok: false, error: "commented on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
   }
 
   return { ok: true };
@@ -498,7 +498,7 @@ export async function deleteOwnComment(
   try {
     await softDeleteInteraction(db, recordUri);
   } catch {
-    return { ok: false, error: "deleted on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+    return { ok: false, error: "deleted on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
   }
 
   return { ok: true };
@@ -583,7 +583,7 @@ export async function followPhotographer(
       });
       await pushFollowNotification();
     } catch {
-      return { ok: false, error: "followed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+      return { ok: false, error: "followed on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
     }
     return { ok: true };
   }
@@ -610,7 +610,7 @@ export async function followPhotographer(
     });
     await pushFollowNotification();
   } catch {
-    return { ok: false, error: "followed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+    return { ok: false, error: "followed on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
   }
 
   return { ok: true };
@@ -647,7 +647,7 @@ export async function unfollowPhotographer(
   try {
     await softDeleteInteraction(db, existing.recordUri);
   } catch {
-    return { ok: false, error: "unfollowed on Bluesky, but syncing to Luminance failed — it will appear shortly" };
+    return { ok: false, error: "unfollowed on Bluesky, but syncing to OpenPhotos failed — it will appear shortly" };
   }
 
   return { ok: true };

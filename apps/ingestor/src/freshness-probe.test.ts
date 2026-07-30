@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photographers } from "@luminance/db";
+import { createTestDb, photographers } from "@openphotos/db";
 import { eq } from "drizzle-orm";
 import { createFreshnessProbe } from "./freshness-probe.js";
 

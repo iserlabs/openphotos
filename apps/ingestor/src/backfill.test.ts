@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { createTestDb, photos, photographers, tombstones, seriesPhotos, series } from "@luminance/db";
-import { BSKY_POST, OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@luminance/lexicons";
+import { createTestDb, photos, photographers, tombstones, seriesPhotos, series } from "@openphotos/db";
+import { BSKY_POST, OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@openphotos/lexicons";
 import { Indexer } from "./indexer.js";
 import { runBackfill, startBackfillLoop } from "./backfill.js";
 
@@ -303,7 +303,7 @@ describe("periodic reconciliation", () => {
 describe("purge-vs-inflight-backfill race", () => {
   it("aborts the walk without fetching when the photographer deregistered mid-flight", async () => {
     const db = await createTestDb();
-    const { photographers, photos } = await import("@luminance/db");
+    const { photographers, photos } = await import("@openphotos/db");
     // Deregistered BEFORE the walk reaches its first collection — simulates
     // the purge landing between the loop's pending-query and the walk.
     await db.insert(photographers).values({ did: DID, handle: "kevin.photos", status: "deregistered", backfillStatus: "pending" });

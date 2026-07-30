@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { ThreadView } from "@luminance/atproto";
-import { createTestDb, recordInteraction, softDeleteInteraction } from "@luminance/db";
+import type { ThreadView } from "@openphotos/atproto";
+import { createTestDb, recordInteraction, softDeleteInteraction } from "@openphotos/db";
 import { flattenThread, pendingOwnComments } from "./thread";
 // Real, captured-from-AppView fixture (Task 3) — a post with zero replies.
 // Reused here to confirm the (empty) real shape parses without special-casing.

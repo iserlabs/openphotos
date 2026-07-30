@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { adminAudit, photographers } from "@luminance/db";
+import { adminAudit, photographers } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { requestRefresh } from "@/lib/refresh";
