@@ -1,10 +1,14 @@
 import { eq, inArray, or, sql } from "drizzle-orm";
-import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@luminance/db";
+import { photos, series, seriesPhotos, photographers, tombstones, type Db } from "@openphotos/db";
 import {
-  mapLuminancePhoto, mapLuminanceSeries, mapLuminanceProfile, mapBskyPost, mapBskyProfile,
-  mapGrainRecord, GRAIN_COLLECTIONS, type Ctx, type MappedPhoto, type MappedSeries,
-} from "@luminance/atproto";
-import { LUMINANCE_PHOTO, LUMINANCE_SERIES, LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE } from "@luminance/lexicons";
+  mapLuminanceProfile, mapBskyPost, mapBskyProfile,
+  mapGrainRecord, GRAIN_COLLECTIONS, mapOpencontentPhotograph, mapOpencontentCollection,
+  type Ctx, type MappedPhoto, type MappedSeries,
+} from "@openphotos/atproto";
+import {
+  LUMINANCE_PROFILE, BSKY_POST, BSKY_PROFILE,
+  OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION,
+} from "@openphotos/lexicons";
 
 export interface JetstreamEvent {
   did: string; time_us: number; kind: "commit" | "identity" | "account";
@@ -60,15 +64,7 @@ export class Indexer {
 
     const ctx: Ctx = { did: evt.did, collection: c.collection, rkey: c.rkey, cid: c.cid ?? "", indexedAt: new Date() };
     try {
-      if (c.collection === LUMINANCE_PHOTO) {
-        const m = mapLuminancePhoto(ctx, c.record);
-        if (!m) return void this.stats.skipped++;
-        await this.applyPhotoRows([m]);
-      } else if (c.collection === LUMINANCE_SERIES) {
-        const m = mapLuminanceSeries(ctx, c.record);
-        if (!m) return void this.stats.skipped++;
-        await this.applySeries(m);
-      } else if (c.collection === LUMINANCE_PROFILE) {
+      if (c.collection === LUMINANCE_PROFILE) {
         const p = mapLuminanceProfile(evt.did, c.record);
         await this.db.update(photographers).set({ displayName: p.displayName, bio: p.bio, website: p.website, location: p.location, avatarCid: p.avatarCid }).where(eq(photographers.did, evt.did));
       } else if (c.collection === BSKY_POST) {
@@ -95,6 +91,16 @@ export class Indexer {
           target: [seriesPhotos.seriesUri, seriesPhotos.photoUri],
           set: { position: m.seriesItem.position, itemUri: m.seriesItem.itemUri },
         });
+      } else if (c.collection === OPENCONTENT_PHOTOGRAPH) {
+        // no includeOpencontent toggle: the portfolio vocabulary is the point,
+        // not an optional supplementary source (spec §6)
+        const m = mapOpencontentPhotograph(ctx, c.record);
+        if (!m) return void this.stats.skipped++;
+        await this.applyPhotoRows([m]);
+      } else if (c.collection === OPENCONTENT_COLLECTION) {
+        const m = mapOpencontentCollection(ctx, c.record);
+        if (!m) return void this.stats.skipped++;
+        await this.applySeries(m);
       }
     } catch (err) {
       this.stats.skipped++; // poison event costs one photo, never the stream (spec §12)

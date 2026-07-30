@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { startLogin } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Register — Luminance",
+  title: "Register — OpenPhotos",
 };
 
 const ERRORS: Record<string, string> = {
@@ -28,7 +28,7 @@ export default async function RegisterPage({
         Register your photography
       </h1>
       <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-        Luminance indexes photos straight from your own PDS — nothing is uploaded
+        OpenPhotos indexes photos straight from your own PDS — nothing is uploaded
         here. Sign in with your AT Protocol account to opt in; you can leave at any
         time.
       </p>

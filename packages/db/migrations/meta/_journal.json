@@ -15,6 +15,41 @@
       "when": 1784672254952,
       "tag": "0001_series_item_uri",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784817271137,
+      "tag": "0002_social_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784817975297,
+      "tag": "0003_notifications_index_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784963183502,
+      "tag": "0004_blur_data_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784991763330,
+      "tag": "0005_admin_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785255857120,
+      "tag": "0006_opencontent_source",
+      "breakpoints": true
     }
   ]
 }

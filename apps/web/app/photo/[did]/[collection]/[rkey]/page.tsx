@@ -1,12 +1,22 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { unstable_cache } from "next/cache";
+import { AppView, type ThreadView } from "@openphotos/atproto";
+import { engagementFor, findInteraction } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
+import { getSession } from "@/lib/session";
+import { routeInteraction } from "@/lib/interactions";
 import { getPhotoRecord, isSensitive, buildAtUri } from "@/lib/queries";
 import { safeExternalHref } from "@/lib/safe-href";
+import { flattenThread, pendingOwnComments } from "@/lib/thread";
 import { SensitiveImage } from "@/components/photo-card";
-import type { Db } from "@luminance/db";
+import { LikeButton } from "@/components/like-button";
+import { CommentThread } from "@/components/comment-thread";
+import { CommentComposer } from "@/components/comment-composer";
+import { LightboxProvider, LightboxTrigger } from "@/components/lightbox";
 
 // Live DB per request — moderation/label state must always be current.
 export const dynamic = "force-dynamic";
@@ -22,11 +32,48 @@ const EXIF_FIELDS: { key: "camera" | "lens" | "focalLength" | "fNumber" | "shutt
   { key: "iso", label: "ISO" },
 ];
 
-async function load(db: Db, { did, collection, rkey }: Params) {
-  // `did` arrives URL-decoded from the Next router; decoding again would
-  // corrupt did:web ports (%3A).
-  const atUri = buildAtUri(did, collection, rkey);
-  return getPhotoRecord(db, atUri);
+// Next 16 delivers PAGE params percent-encoded (`did%3Aplc%3A…`) even when the
+// URL holds a literal `:` — verified empirically; route handlers (e.g. /img)
+// get them decoded. Decode exactly once, tolerating malformed input.
+function decodeParam(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+/**
+ * 60s cache for the read-only Bluesky thread (spec §7). `unstable_cache` is
+ * independent of this route's `force-dynamic` segment config: that setting
+ * only forces per-request *rendering* and disables `fetch()` caching — it
+ * does not touch Next's Data Cache, which `unstable_cache` uses here to
+ * persist this non-`fetch` AppView call across requests. Keyed on the at-uri
+ * (its only argument) so different photos never share an entry. Chosen over
+ * a bare per-request call because the brief calls for an explicit 60s cache
+ * and this is the simplest mechanism that coexists with force-dynamic; a
+ * plain uncached call remains the documented fallback if this ever proves to
+ * fight the route's dynamic rendering in practice.
+ *
+ * The static `"photo-threads"` tag lets the comment/delete server actions
+ * `revalidateTag` this cache after a write, so a just-posted (or just-deleted)
+ * comment shows on the next render instead of waiting out the 60s TTL.
+ */
+const getCachedThread = unstable_cache(
+  async (atUri: string): Promise<ThreadView> => new AppView().getPostThread(atUri, 10),
+  ["photo-thread"],
+  { revalidate: 60, tags: ["photo-threads"] },
+);
+
+// React.cache: generateMetadata and the page body both need this record, and
+// Next runs them as separate calls in the same request — per-request memoized
+// on the at-uri (a primitive key; the params OBJECTS differ between the two
+// calls, so keying on them would never hit).
+const cachedGetPhotoRecord = cache((atUri: string) => getPhotoRecord(getDb(), atUri));
+
+async function load({ did, collection, rkey }: Params) {
+  const atUri = buildAtUri(decodeParam(did), decodeParam(collection), decodeParam(rkey));
+  return cachedGetPhotoRecord(atUri);
 }
 
 export async function generateMetadata({
@@ -35,7 +82,7 @@ export async function generateMetadata({
   params: Promise<Params>;
 }): Promise<Metadata> {
   const p = await params;
-  const rec = await load(getDb(), p);
+  const rec = await load(p);
   if (!rec) return {};
 
   const first = rec.items[0];
@@ -43,7 +90,7 @@ export async function generateMetadata({
   const description = first.alt || first.caption || undefined;
 
   return {
-    title: `${title} — Luminance`,
+    title: `${title} — OpenPhotos`,
     description,
     openGraph: {
       title,
@@ -55,17 +102,55 @@ export async function generateMetadata({
 
 export default async function PhotoDetailPage({ params }: { params: Promise<Params> }) {
   const p = await params;
-  const rec = await load(getDb(), p);
+  const rec = await load(p);
   if (!rec) notFound();
   const { items, photographer } = rec;
-  // `did` arrives URL-decoded from the Next router; decoding again would
-  // corrupt did:web ports (%3A).
-  const decodedDid = p.did;
+  const decodedDid = decodeParam(p.did);
+  const decodedCollection = decodeParam(p.collection);
+  const decodedRkey = decodeParam(p.rkey);
+  const atUri = buildAtUri(decodedDid, decodedCollection, decodedRkey);
+  const returnTo = `/photo/${encodeURIComponent(decodedDid)}/${decodedCollection}/${decodedRkey}`;
 
   const sourceHref =
     items[0].source === "bsky"
       ? `https://bsky.app/profile/${decodedDid}/post/${p.rkey}`
       : safeExternalHref(photographer.website);
+
+  // Interactions (likes/comments) only exist for bsky-sourced photos — a real
+  // app.bsky.feed.post backs them. OpenPhotos/grain sources get a disabled row
+  // instead (spec §7/§10 — phase 3 fills this router branch).
+  const routed = routeInteraction(items[0]);
+  const session = await getSession();
+
+  let likeCount = 0;
+  let liked = false;
+  let commentNodes: ReturnType<typeof flattenThread> = [];
+  let threadUnavailable = false;
+
+  if (routed.supported) {
+    const db = getDb();
+    const [engagement, interaction] = await Promise.all([
+      engagementFor(db, [atUri]),
+      session.did ? findInteraction(db, session.did, "like", atUri) : Promise.resolve(null),
+    ]);
+    likeCount = engagement.get(atUri)?.likeCount ?? 0;
+    liked = interaction != null;
+
+    try {
+      const thread = await getCachedThread(atUri);
+      commentNodes = flattenThread(thread, { maxDepth: 2 });
+      // Merge the viewer's own comments the cached AppView thread hasn't indexed
+      // yet (write-through row exists, AppView lag ~1min) so the author always
+      // sees their just-posted comment immediately.
+      if (session.did) {
+        const existing = new Set(commentNodes.map((n) => n.uri));
+        const pending = await pendingOwnComments(db, session.did, session.handle ?? session.did, atUri, existing);
+        commentNodes = [...commentNodes, ...pending];
+      }
+    } catch {
+      threadUnavailable = true;
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
@@ -85,6 +170,12 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
         ) : null}
       </header>
 
+      <LightboxProvider
+        items={items.map((photo) => ({
+          src: `/img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/full`,
+          alt: photo.alt ?? "",
+        }))}
+      >
       <div className="mt-8 space-y-12">
         {items.map((photo, i) => {
           // Practically at most one item ever carries a title (only bsky
@@ -101,20 +192,32 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
           return (
             <figure key={photo.mediaIndex} id={`i${photo.mediaIndex}`} className="scroll-mt-6">
               <SensitiveImage sensitive={isSensitive(photo.labels)}>
+                <LightboxTrigger index={i}>
                 <div
-                  style={{ aspectRatio: `${photo.width ?? 3}/${photo.height ?? 2}` }}
+                  style={{
+                    aspectRatio: `${photo.width ?? 3}/${photo.height ?? 2}`,
+                    // Blur-up placeholder behind the full rendition (the box's
+                    // aspect matches the photo, so cover ≈ contain here).
+                    ...(photo.blurDataUrl
+                      ? { backgroundImage: `url("${photo.blurDataUrl}")`, backgroundSize: "cover" }
+                      : {}),
+                  }}
                   className="overflow-hidden rounded-md bg-zinc-900"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/full`}
+                    srcSet={`/img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/feed 1024w, /img/${encodeURIComponent(photo.did)}/${encodeURIComponent(photo.blobCid)}/full 2048w`}
+                    sizes="(min-width: 768px) 720px, 100vw"
                     alt={photo.alt ?? ""}
                     width={photo.width ?? undefined}
                     height={photo.height ?? undefined}
-                    loading="lazy"
+                    loading={i === 0 ? "eager" : "lazy"}
+                    fetchPriority={i === 0 ? "high" : undefined}
                     className="h-full w-full object-contain"
                   />
                 </div>
+                </LightboxTrigger>
               </SensitiveImage>
 
               {photo.title ? (
@@ -157,6 +260,49 @@ export default async function PhotoDetailPage({ params }: { params: Promise<Para
           );
         })}
       </div>
+      </LightboxProvider>
+
+      <section className="mt-12 border-t border-zinc-800 pt-8">
+        {routed.supported ? (
+          <>
+            <LikeButton
+              atUri={atUri}
+              liked={liked}
+              count={likeCount}
+              signedIn={session.did != null}
+              returnTo={returnTo}
+            />
+
+            <div className="mt-8">
+              <h2 className="text-sm font-medium text-zinc-400">Comments</h2>
+
+              <div className="mt-3">
+                {threadUnavailable ? (
+                  <p className="text-sm text-zinc-500">Comments temporarily unavailable</p>
+                ) : (
+                  <CommentThread nodes={commentNodes} viewerDid={session.did} atUri={atUri} />
+                )}
+              </div>
+
+              {session.did ? (
+                <CommentComposer atUri={atUri} />
+              ) : (
+                <p className="mt-4 text-sm text-zinc-500">
+                  <Link
+                    href={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+                    className="text-sky-400 hover:text-sky-300"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  to comment.
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-zinc-600">Interactions arrive with portfolio publishing</p>
+        )}
+      </section>
     </div>
   );
 }

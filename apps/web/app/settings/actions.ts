@@ -3,9 +3,10 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
-import { photographers } from "@luminance/db";
+import { adminAudit, photographers } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { requestRefresh } from "@/lib/refresh";
 import {
   setHiddenForDid,
   deregisterDid,
@@ -76,6 +77,29 @@ export async function adminTakedown(formData: FormData) {
   const reason = String(formData.get("reason") ?? "").trim();
   if (!atUri || !Number.isInteger(mediaIndex)) redirect("/settings");
 
-  await adminTakedownRow(getDb(), atUri, mediaIndex, reason);
+  const db = getDb();
+  await adminTakedownRow(db, atUri, mediaIndex, reason);
+  // Audit trail (required before multi-admin): who took what down, and why.
+  // session.did is non-null here — isAdmin implies an authenticated session.
+  await db.insert(adminAudit).values({
+    actorDid: session.did!,
+    action: "takedown",
+    target: `${atUri}#${mediaIndex}`,
+    reason: reason || null,
+  });
   revalidatePath("/settings");
+}
+
+/**
+ * Photographer-initiated re-index (see lib/refresh.ts). Full containment: any
+ * unexpected throw stays server-side; the page re-renders with fresh status.
+ */
+export async function refreshPhotos() {
+  try {
+    const session = await getSession();
+    await requestRefresh(getDb(), session.did ?? null);
+    revalidatePath("/settings");
+  } catch {
+    // Swallow — the settings page's status line reflects reality on rerender.
+  }
 }

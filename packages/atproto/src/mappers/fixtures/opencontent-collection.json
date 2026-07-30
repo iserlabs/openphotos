@@ -1,0 +1,24 @@
+{
+  "$type": "social.opencontent.collection",
+  "title": "Bosque del Apache, Winter 2026",
+  "description": "A week photographing snow geese and sandhill cranes at the refuge.",
+  "items": [
+    {
+      "uri": "at://did:plc:kleephotos/social.opencontent.photograph/3lqrs001",
+      "cid": "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "uri": "at://did:plc:kleephotos/social.opencontent.photograph/3lqrs002",
+      "cid": "bafyreibbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "uri": "at://did:plc:kleephotos/social.opencontent.photograph/3lqrs003",
+      "cid": "bafyreicccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "cover": {
+    "uri": "at://did:plc:kleephotos/social.opencontent.photograph/3lqrs002",
+    "cid": "bafyreibbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "createdAt": "2026-07-20T00:00:00.000Z"
+}

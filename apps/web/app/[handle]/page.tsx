@@ -1,31 +1,78 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { and, eq, sql } from "drizzle-orm";
-import { feedPage, photos, photoOverrides, series as seriesTable } from "@luminance/db";
+import { notFound, redirect } from "next/navigation";
+import { unstable_cache } from "next/cache";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { feedPage, engagementFor, findInteraction, photos, photoOverrides, series as seriesTable, seriesPhotos } from "@openphotos/db";
+import { AppView } from "@openphotos/atproto";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
-import { getPhotographerByHandle, splitAtUri } from "@/lib/queries";
+import { getSession } from "@/lib/session";
+import { getPhotographerByHandle, getPhotographerByDid, splitAtUri } from "@/lib/queries";
 import { safeExternalHref } from "@/lib/safe-href";
 import { PhotoGrid } from "@/components/photo-grid";
+import { FollowButton } from "@/components/follow-button";
 
 // Live DB per request — profiles reflect current index/moderation state.
 export const dynamic = "force-dynamic";
 
 const PHOTO_PAGE_SIZE = 60;
 
+const appView = new AppView();
+
+/**
+ * `AppView.getProfile` goes through `safeJsonFetch` (undici's `fetch`
+ * directly, not Next's patched global `fetch`), so Next's `{ next:
+ * { revalidate } }` fetch-cache option never applies to it. `unstable_cache`
+ * is the documented fallback for caching non-`fetch` async functions in this
+ * (pre-Cache-Components — `cacheComponents` isn't enabled in next.config.ts)
+ * model: a 5-minute revalidate window, matching the spec's follower-count
+ * freshness target without a network round-trip on every profile render.
+ */
+const getCachedFollowerCount = unstable_cache(
+  async (did: string) => (await appView.getProfile(did)).followersCount,
+  ["profile-follower-count"],
+  { revalidate: 300 },
+);
+
+/** Wrapped separately from the cache so a thrown/rejected AppView call never gets cached as a failure — only render nothing this request. */
+async function getFollowerCount(did: string): Promise<number | null> {
+  try {
+    return await getCachedFollowerCount(did);
+  } catch {
+    return null;
+  }
+}
+
+// Next 16 delivers PAGE params percent-encoded (same quirk as the photo
+// page): a `/did:plc:…` fallback URL arrives as `did%3Aplc%3A…`.
+function decodeParam(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+// Per-request memo: generateMetadata and the page body both resolve the same
+// photographer; keyed on the handle string (the params objects differ).
+const cachedByHandle = cache((handle: string) => getPhotographerByHandle(getDb(), handle));
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ handle: string }>;
 }): Promise<Metadata> {
-  const { handle } = await params;
+  const { handle: rawHandle } = await params;
+  const handle = decodeParam(rawHandle);
+  if (handle.startsWith("did:")) return {}; // the page itself redirects to the current handle
   const db = getDb();
-  const photographer = await getPhotographerByHandle(db, handle);
+  const photographer = await cachedByHandle(handle);
   if (!photographer) return {};
 
   const title = photographer.displayName ?? photographer.handle;
-  const description = photographer.bio ?? `Photography by ${title} on Luminance.`;
+  const description = photographer.bio ?? `Photography by ${title} on OpenPhotos.`;
   const { items } = await feedPage(db, { limit: 1, did: photographer.did });
   const first = items[0];
   const images = first
@@ -33,7 +80,7 @@ export async function generateMetadata({
     : undefined;
 
   return {
-    title: `${title} — Luminance`,
+    title: `${title} — OpenPhotos`,
     description,
     openGraph: { title, description, images, type: "profile" },
   };
@@ -41,32 +88,104 @@ export async function generateMetadata({
 
 export default async function ProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ handle: string }>;
+  searchParams: Promise<{ cursor?: string }>;
 }) {
-  const { handle } = await params;
+  const { handle: rawHandle } = await params;
+  const handle = decodeParam(rawHandle);
+  // Permanent DID-keyed fallback: `/did:plc:…` always lands on the CURRENT
+  // handle's profile, so bookmarks survive handle changes (handles never
+  // contain `:`, so this prefix can't collide with a real handle).
+  if (handle.startsWith("did:")) {
+    const byDid = await getPhotographerByDid(getDb(), handle);
+    if (!byDid) notFound();
+    redirect(`/${byDid.handle}`);
+  }
   const db = getDb();
-  const photographer = await getPhotographerByHandle(db, handle);
+  const photographer = await cachedByHandle(handle);
   if (!photographer) notFound();
 
   const websiteHref = safeExternalHref(photographer.website);
+  const session = await getSession();
+  const isOwnProfile = session.did === photographer.did;
 
-  const [{ items }, seriesRows] = await Promise.all([
-    feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did }),
-    db
-      .select({
-        atUri: seriesTable.atUri,
-        title: seriesTable.title,
-        // Suppress the cover thumbnail when it's hidden/taken-down, but keep the
-        // series in the shelf (hence CASE rather than a WHERE filter).
-        coverBlobCid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.blobCid} end`,
-        coverDid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.did} end`,
-      })
-      .from(seriesTable)
-      .leftJoin(photos, and(eq(photos.atUri, seriesTable.coverPhotoUri), eq(photos.mediaIndex, 0)))
-      .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
-      .where(eq(seriesTable.did, photographer.did)),
+  // `items` must resolve before we know which atUris to hand to `engagementFor`,
+  // but the other three queries below have no dependency on it — kick every
+  // promise off up front, await only the blocking one here, then fold
+  // `engagementFor` into a single Promise.all with the rest so it runs
+  // concurrently with whichever of them is still in flight instead of being
+  // awaited sequentially after all four already resolved.
+  const { cursor: cursorParam } = await searchParams;
+  const itemsPromise = feedPage(db, { limit: PHOTO_PAGE_SIZE, did: photographer.did, cursor: cursorParam });
+  const seriesRowsPromise = db
+    .select({
+      atUri: seriesTable.atUri,
+      title: seriesTable.title,
+      // Suppress the cover thumbnail when it's hidden/taken-down, but keep the
+      // series in the shelf (hence CASE rather than a WHERE filter).
+      coverBlobCid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.blobCid} end`,
+      coverDid: sql<string | null>`case when coalesce(${photoOverrides.hidden}, false) = false and coalesce(${photoOverrides.takedown}, false) = false then ${photos.did} end`,
+    })
+    .from(seriesTable)
+    .leftJoin(photos, and(eq(photos.atUri, seriesTable.coverPhotoUri), eq(photos.mediaIndex, 0)))
+    .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
+    .where(eq(seriesTable.did, photographer.did));
+  const followerCountPromise = getFollowerCount(photographer.did);
+  // Write-through truth (spec-honest seam, see FollowButton doc comment):
+  // reflects follows made through OpenPhotos, not necessarily the live
+  // Bluesky graph. Skipped entirely when signed out — nothing to look up.
+  const viewerFollowPromise =
+    session.did && !isOwnProfile ? findInteraction(db, session.did, "follow", photographer.did) : Promise.resolve(null);
+
+  const { items, cursor: nextCursor } = await itemsPromise;
+
+  // ONE grouped engagementFor call per page render (spec §3 constraint —
+  // never per-tile). Only bsky-source posts have real engagement; dedupe
+  // atUris since a multi-image post repeats its atUri across mediaIndex rows.
+  const bskyUris = [...new Set(items.filter((p) => p.source === "bsky").map((p) => p.atUri))];
+
+  const [seriesRows, followerCount, viewerFollow, counts] = await Promise.all([
+    seriesRowsPromise,
+    followerCountPromise,
+    viewerFollowPromise,
+    engagementFor(db, bskyUris),
   ]);
+
+  // Cover fallback for series without a coverPhotoUri (Grain galleries never
+  // set one): use the series' first item's photo. One query for all uncovered
+  // series, grouped in JS by position order.
+  const uncovered = seriesRows.filter((s) => !s.coverBlobCid).map((s) => s.atUri);
+  if (uncovered.length > 0) {
+    const firstItems = await db
+      .select({
+        seriesUri: seriesPhotos.seriesUri,
+        position: seriesPhotos.position,
+        blobCid: photos.blobCid,
+        did: photos.did,
+      })
+      .from(seriesPhotos)
+      .innerJoin(photos, and(eq(photos.atUri, seriesPhotos.photoUri), eq(photos.mediaIndex, 0)))
+      .leftJoin(photoOverrides, and(eq(photoOverrides.atUri, photos.atUri), eq(photoOverrides.mediaIndex, photos.mediaIndex)))
+      .where(and(
+        inArray(seriesPhotos.seriesUri, uncovered),
+        sql`coalesce(${photoOverrides.hidden}, false) = false`,
+        sql`coalesce(${photoOverrides.takedown}, false) = false`,
+      ))
+      .orderBy(asc(seriesPhotos.position));
+    const firstBySeries = new Map<string, { blobCid: string; did: string }>();
+    for (const f of firstItems) {
+      if (!firstBySeries.has(f.seriesUri)) firstBySeries.set(f.seriesUri, { blobCid: f.blobCid, did: f.did });
+    }
+    for (const s of seriesRows) {
+      const fallback = !s.coverBlobCid ? firstBySeries.get(s.atUri) : undefined;
+      if (fallback) {
+        s.coverBlobCid = fallback.blobCid;
+        s.coverDid = fallback.did;
+      }
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
@@ -84,11 +203,17 @@ export default async function ProfilePage({
         ) : (
           <div className="h-24 w-24 flex-none rounded-full bg-zinc-800" />
         )}
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
             {photographer.displayName ?? photographer.handle}
           </h1>
           <p className="text-sm text-zinc-500">@{photographer.handle}</p>
+          {/* Follower count comes from the Bluesky AppView (5-min cache) — rendered only when the fetch succeeds (spec: fail silent, no stale/zero placeholder). */}
+          {followerCount !== null ? (
+            <p className="mt-1 text-sm text-zinc-500">
+              {followerCount} follower{followerCount === 1 ? "" : "s"}
+            </p>
+          ) : null}
           {photographer.bio ? (
             <p className="mt-3 max-w-xl text-sm text-zinc-300">{photographer.bio}</p>
           ) : null}
@@ -103,6 +228,17 @@ export default async function ProfilePage({
             </a>
           ) : null}
         </div>
+        {!isOwnProfile ? (
+          <div className="flex-none">
+            <FollowButton
+              key={photographer.did}
+              photographerDid={photographer.did}
+              photographerHandle={photographer.handle}
+              signedIn={Boolean(session.did)}
+              initialFollowing={Boolean(viewerFollow)}
+            />
+          </div>
+        ) : null}
       </header>
 
       {seriesRows.length > 0 ? (
@@ -141,10 +277,22 @@ export default async function ProfilePage({
 
       <section className="mt-8">
         {items.length === 0 ? (
-          <p className="py-16 text-center text-sm text-zinc-500">No photos indexed yet.</p>
+          <p className="py-16 text-center text-sm text-zinc-500">
+            {cursorParam ? "No more photos." : "No photos indexed yet."}
+          </p>
         ) : (
-          <PhotoGrid items={items} />
+          <PhotoGrid items={items} counts={counts} />
         )}
+        {nextCursor ? (
+          <div className="mt-8 flex justify-center pb-4">
+            <Link
+              href={`/${photographer.handle}?cursor=${encodeURIComponent(nextCursor)}`}
+              className="rounded-md border border-zinc-800 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-900"
+            >
+              Load more
+            </Link>
+          </div>
+        ) : null}
       </section>
     </div>
   );

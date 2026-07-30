@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "DMCA / Copyright — Luminance",
+  title: "DMCA / Copyright — OpenPhotos",
 };
 
 export default function DmcaPage() {
@@ -13,9 +13,9 @@ export default function DmcaPage() {
 
       <div className="mt-6 space-y-4 text-zinc-300">
         <p>
-          Luminance indexes photography records that photographers publish
+          OpenPhotos indexes photography records that photographers publish
           to their own Personal Data Server (PDS) on the AT Protocol. If you
-          believe content indexed on Luminance infringes your copyright, you
+          believe content indexed on OpenPhotos infringes your copyright, you
           may submit a takedown notice to{" "}
           <a
             href="mailto:dmca@luminance.social"
@@ -42,7 +42,7 @@ export default function DmcaPage() {
             <li>
               Identification of the specific material you claim is
               infringing, and information reasonably sufficient to let us
-              locate it (e.g. the Luminance URL or the AT-URI of the
+              locate it (e.g. the OpenPhotos URL or the AT-URI of the
               record).
             </li>
             <li>

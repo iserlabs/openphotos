@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { and, count, desc, eq } from "drizzle-orm";
-import { photographers, photos, photoOverrides } from "@luminance/db";
+import { photographers, photos, photoOverrides } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { setPhotoHidden, updateSources, deregister, adminTakedown } from "./actions";
+import { setPhotoHidden, updateSources, deregister, adminTakedown, refreshPhotos } from "./actions";
 
 export const metadata: Metadata = {
-  title: "Settings — Luminance",
+  title: "Settings — OpenPhotos",
 };
 
 // Session + live DB per request; never cached.
@@ -31,6 +31,7 @@ export default async function SettingsPage({
       includeBsky: photographers.includeBsky,
       includeGrain: photographers.includeGrain,
       status: photographers.status,
+      backfillStatus: photographers.backfillStatus,
     })
     .from(photographers)
     .where(eq(photographers.did, did));
@@ -118,6 +119,36 @@ export default async function SettingsPage({
           <h2 className="text-lg font-medium text-zinc-100">Your photos</h2>
           <span className="text-xs text-zinc-500">{total} indexed</span>
         </div>
+
+        {/* On-demand re-index: the public firehose has been observed starving
+            this PDS's events; this re-arms the reconciliation walk instead of
+            waiting for the periodic cycle. */}
+        <form action={refreshPhotos} className="mt-3">
+          {me.backfillStatus === "pending" || me.backfillStatus === "running" ? (
+            <p className="text-sm text-zinc-400">
+              Refreshing from your data server… this page will show new photos shortly.
+            </p>
+          ) : (
+            <>
+              {me.backfillStatus === "failed" ? (
+                <p className="mb-2 text-sm text-amber-400">
+                  The last refresh didn&apos;t finish — your data server may have been unreachable.
+                  Retry below; if it keeps failing, it will also retry automatically.
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white"
+              >
+                {me.backfillStatus === "failed" ? "Retry refresh" : "Refresh my photos"}
+              </button>
+            </>
+          )}
+          <p className="mt-1 text-xs text-zinc-500">
+            Just posted on Bluesky and don&apos;t see it here? This pulls your latest photos in
+            right away.
+          </p>
+        </form>
 
         {rows.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">
@@ -230,7 +261,7 @@ export default async function SettingsPage({
       <section className="mt-12 border-t border-zinc-800 pt-8">
         <h2 className="text-lg font-medium text-red-300">Deregister</h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Removes your photos from the Luminance index. Your records stay on your
+          Removes your photos from the OpenPhotos index. Your records stay on your
           PDS, untouched — you can register again any time.
         </p>
         <form action={deregister} className="mt-4 space-y-3">

@@ -30,7 +30,7 @@ from step 3 already running).
 2. Run migrations from the repo root:
 
    ```bash
-   DATABASE_URL="<neon-connection-string>" pnpm --filter @luminance/db exec drizzle-kit migrate
+   DATABASE_URL="<neon-connection-string>" pnpm --filter @openphotos/db exec drizzle-kit migrate
    ```
 
    This applies `packages/db/migrations/0000_init.sql` and
@@ -55,8 +55,8 @@ from step 3 already running).
    repo root — `vercel.json` at the repo root already scopes install/build to
    the web app (`"installCommand": "pnpm install"`,
    `"buildCommand": "pnpm --filter web build"`), which needs the full pnpm
-   workspace present to resolve `@luminance/db`, `@luminance/atproto`,
-   `@luminance/lexicons`.
+   workspace present to resolve `@openphotos/db`, `@openphotos/atproto`,
+   `@openphotos/lexicons`.
 
 2. Set every variable from `apps/web/.env.example` in Project Settings →
    Environment Variables (Production, and Preview if you want preview
@@ -158,7 +158,7 @@ this once `luminance.social` DNS (step 4) is under your control, since it
 adds two more TXT records (`_lexicon.actor.luminance.social` and
 `_lexicon.portfolio.luminance.social`) at the same DNS host. Not required for
 the app itself to function — the `social.luminance.*` lexicons are consumed
-directly from the JSON files via `@luminance/lexicons` — but required for the
+directly from the JSON files via `@openphotos/lexicons` — but required for the
 NSIDs to resolve for anyone (or anything) else on the network.
 
 ## 6. OAuth smoke test with a real bsky.social account
@@ -262,3 +262,38 @@ Target ≥ 90 on both pages. If short: check image proxy presets are actually
 being served (`/img/[did]/[cid]/[preset]`, `thumb`/`feed`/`full`) rather than
 full-size originals, and that `aspectRatio` is present on photo records (it
 reserves layout space and avoids CLS — spec §10).
+
+## Verifying the social layer
+
+Manual acceptance checklist for the phase-2 social layer — criteria 1–3 from the
+design spec (`docs/superpowers/specs/2026-07-22-social-layer-design.md` §11).
+Run these on the live site once at least one photographer is registered and has
+a Bluesky-sourced photo in the feed. You need two ATProto accounts: the
+**photographer** (registered on OpenPhotos) and a **viewer** (any bsky account).
+The automated write-path proof for the same flow is
+`apps/web/integration/social.dev-env.test.ts`
+(`pnpm --filter web test:integration`) — this checklist confirms it against real
+Bluesky + real accounts end-to-end.
+
+- [ ] **Criterion 1 — like interop reaches Bluesky.** Sign in on OpenPhotos as the
+  viewer (`/login`), open one of the photographer's photo pages, and click Like.
+  Then open the **photographer's Bluesky notifications** (bsky.app or the app) and
+  confirm the like appears there — it is a real `app.bsky.feed.like` in the
+  viewer's repo, so Bluesky's own AppView surfaces it. Confirm the like count on
+  the OpenPhotos photo page ticked up and did not regress on refresh.
+- [ ] **Criterion 2 — comments render both directions.** Still signed in as the
+  viewer, post a comment on the same OpenPhotos photo. (a) **OpenPhotos → Bluesky:**
+  open the underlying post in the Bluesky app ("View on Bluesky" link on the photo
+  page) and confirm the comment shows in that post's thread. (b) **Bluesky →
+  OpenPhotos:** from the Bluesky app, reply to the same post; within the photo
+  page's 60s thread cache (hard-refresh to force it) confirm that reply renders in
+  the OpenPhotos comment thread.
+- [ ] **Criterion 3 — non-OpenPhotos like reaches `/notifications` within a sweep +
+  1 min.** From a Bluesky account that is **not** signed in to OpenPhotos, like the
+  photographer's underlying Bluesky post directly in the Bluesky app. Note the
+  time. Sign in to OpenPhotos as the photographer and watch `/notifications`: the
+  like should appear within one engagement-sweep interval + ~1 min (the sweep is
+  what pulls externally-originated likes into the notification center; see the
+  engagement sweep in `apps/ingestor`). If it does not, check the ingestor logs
+  for the sweep tick and confirm the photographer's posts are within the swept
+  set.

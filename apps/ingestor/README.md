@@ -1,7 +1,7 @@
 # ingestor
 
 Firehose consumer + backfill worker for luminance.social. Watches Jetstream,
-maps ATProto records into the index (`@luminance/db`), and backfills a
+maps ATProto records into the index (`@openphotos/db`), and backfills a
 photographer's repo history from their PDS.
 
 ## Scripts

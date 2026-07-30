@@ -1,0 +1,344 @@
+{
+  "posts": [
+    {
+      "uri": "at://did:plc:ka5oytd2d6rhs2r6yrvt6yb2/app.bsky.feed.post/3mrap7bkyuc2t",
+      "cid": "bafyreifnfpexjb5rv6lyecqq24mylurj53rmpwxtlfvgy4y35vsidwbime",
+      "author": {
+        "did": "did:plc:ka5oytd2d6rhs2r6yrvt6yb2",
+        "handle": "kevinleephotos.bsky.social",
+        "displayName": "Kevin K. Lee",
+        "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreibezjxmjkcgahtenp7he7oprbxy67mfq5cpofgfhqfjy6rrgkodri",
+        "associated": {
+          "activitySubscription": {
+            "allowSubscriptions": "followers"
+          }
+        },
+        "labels": [],
+        "createdAt": "2025-09-04T17:31:42.398Z"
+      },
+      "record": {
+        "$type": "app.bsky.feed.post",
+        "createdAt": "2026-07-22T16:04:14.529Z",
+        "embed": {
+          "$type": "app.bsky.embed.gallery",
+          "items": [
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3400,
+                "width": 3400
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreicaipajd77wf53szr6kojxyabjzxspkorgbzizbdlyzdaq6zuokd4"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1943673
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 1568,
+                "width": 1254
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreieu3j6n62qpqvqma4y2d6vary2y3bx6cen3urxavx3kbyu4jtlp24"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1623032
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3157,
+                "width": 3157
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreiasoozngysv37vmot26siptpuqdpa4fzsl6mzlryjakqrjakqirou"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1931107
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3564,
+                "width": 3564
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreigkrw5zmqdmqscl4xkwsrl3kt4mkplpzl6gqgit5oyp65w6xbbspy"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1954018
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3712,
+                "width": 3712
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreig7wkbamfma3654vq2ms6uqax37wrnuhq6hiotj5kwgq72crkkvtu"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1990183
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3999,
+                "width": 3200
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreigsvynkqzvvf6odymmpiobix3cengjtsgnqlbatn2dm2hpn3ch6cy"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1803455
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3553,
+                "width": 3553
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreigki7mghhlytumo72xs4oepmllcfv4ofwpyyygpf3jj3vgqsyen5u"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1956924
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 3124,
+                "width": 2499
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreib7kersleqi6xfre7iwljnit5ucfc6dmzslvwe4pbn2m6h45mryn4"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1994222
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 2983,
+                "width": 2983
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreih74oaibbb3dpzsmt6xoyi3r76osaq53h53ta4l2fd7v6bx5sfx5y"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1965846
+              }
+            },
+            {
+              "$type": "app.bsky.embed.gallery#image",
+              "alt": "",
+              "aspectRatio": {
+                "height": 2888,
+                "width": 2888
+              },
+              "image": {
+                "$type": "blob",
+                "ref": {
+                  "$link": "bafkreiaaycimsrzyba5ereolppr75ftxwhzqygkjjg3jkucimepjih5a5e"
+                },
+                "mimeType": "image/jpeg",
+                "size": 1887539
+              }
+            }
+          ]
+        },
+        "facets": [
+          {
+            "features": [
+              {
+                "$type": "app.bsky.richtext.facet#tag",
+                "tag": "photography"
+              }
+            ],
+            "index": {
+              "byteEnd": 12,
+              "byteStart": 0
+            }
+          },
+          {
+            "features": [
+              {
+                "$type": "app.bsky.richtext.facet#tag",
+                "tag": "nikon"
+              }
+            ],
+            "index": {
+              "byteEnd": 19,
+              "byteStart": 13
+            }
+          },
+          {
+            "features": [
+              {
+                "$type": "app.bsky.richtext.facet#tag",
+                "tag": "zf"
+              }
+            ],
+            "index": {
+              "byteEnd": 23,
+              "byteStart": 20
+            }
+          }
+        ],
+        "langs": [
+          "en"
+        ],
+        "text": "#photography #nikon #zf"
+      },
+      "embed": {
+        "items": [
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreicaipajd77wf53szr6kojxyabjzxspkorgbzizbdlyzdaq6zuokd4",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreicaipajd77wf53szr6kojxyabjzxspkorgbzizbdlyzdaq6zuokd4",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3400,
+              "width": 3400
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreieu3j6n62qpqvqma4y2d6vary2y3bx6cen3urxavx3kbyu4jtlp24",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreieu3j6n62qpqvqma4y2d6vary2y3bx6cen3urxavx3kbyu4jtlp24",
+            "alt": "",
+            "aspectRatio": {
+              "height": 1568,
+              "width": 1254
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreiasoozngysv37vmot26siptpuqdpa4fzsl6mzlryjakqrjakqirou",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreiasoozngysv37vmot26siptpuqdpa4fzsl6mzlryjakqrjakqirou",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3157,
+              "width": 3157
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreigkrw5zmqdmqscl4xkwsrl3kt4mkplpzl6gqgit5oyp65w6xbbspy",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreigkrw5zmqdmqscl4xkwsrl3kt4mkplpzl6gqgit5oyp65w6xbbspy",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3564,
+              "width": 3564
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreig7wkbamfma3654vq2ms6uqax37wrnuhq6hiotj5kwgq72crkkvtu",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreig7wkbamfma3654vq2ms6uqax37wrnuhq6hiotj5kwgq72crkkvtu",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3712,
+              "width": 3712
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreigsvynkqzvvf6odymmpiobix3cengjtsgnqlbatn2dm2hpn3ch6cy",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreigsvynkqzvvf6odymmpiobix3cengjtsgnqlbatn2dm2hpn3ch6cy",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3999,
+              "width": 3200
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreigki7mghhlytumo72xs4oepmllcfv4ofwpyyygpf3jj3vgqsyen5u",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreigki7mghhlytumo72xs4oepmllcfv4ofwpyyygpf3jj3vgqsyen5u",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3553,
+              "width": 3553
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreib7kersleqi6xfre7iwljnit5ucfc6dmzslvwe4pbn2m6h45mryn4",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreib7kersleqi6xfre7iwljnit5ucfc6dmzslvwe4pbn2m6h45mryn4",
+            "alt": "",
+            "aspectRatio": {
+              "height": 3124,
+              "width": 2499
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreih74oaibbb3dpzsmt6xoyi3r76osaq53h53ta4l2fd7v6bx5sfx5y",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreih74oaibbb3dpzsmt6xoyi3r76osaq53h53ta4l2fd7v6bx5sfx5y",
+            "alt": "",
+            "aspectRatio": {
+              "height": 2983,
+              "width": 2983
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          },
+          {
+            "thumbnail": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreiaaycimsrzyba5ereolppr75ftxwhzqygkjjg3jkucimepjih5a5e",
+            "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:ka5oytd2d6rhs2r6yrvt6yb2/bafkreiaaycimsrzyba5ereolppr75ftxwhzqygkjjg3jkucimepjih5a5e",
+            "alt": "",
+            "aspectRatio": {
+              "height": 2888,
+              "width": 2888
+            },
+            "$type": "app.bsky.embed.gallery#viewImage"
+          }
+        ],
+        "$type": "app.bsky.embed.gallery#view"
+      },
+      "bookmarkCount": 0,
+      "replyCount": 0,
+      "repostCount": 0,
+      "likeCount": 0,
+      "quoteCount": 0,
+      "indexedAt": "2026-07-22T16:04:48.867Z",
+      "labels": []
+    }
+  ]
+}

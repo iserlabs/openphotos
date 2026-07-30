@@ -12,7 +12,7 @@ import Link from "next/link";
  * button must NOT be nested inside the tile's `<Link>` (no interactive
  * element may nest inside another). The sensitivity intersection against
  * `LABEL_BLUR` is computed by callers (server components) and passed down
- * as a plain boolean — this file stays free of any `@luminance/db`/drizzle
+ * as a plain boolean — this file stays free of any `@openphotos/db`/drizzle
  * imports.
  */
 export function SensitiveImage({
@@ -51,6 +51,13 @@ export function PhotoCard({
   width,
   height,
   sensitive,
+  priority = false,
+  eager = false,
+  likeCount,
+  replyCount,
+  srcSet,
+  sizes,
+  blurDataUrl,
 }: {
   href: string;
   src: string;
@@ -58,22 +65,71 @@ export function PhotoCard({
   width: number | null;
   height: number | null;
   sensitive: boolean;
+  /** Above-the-fold LCP candidates: eager-load with a high fetch priority. */
+  priority?: boolean;
+  /**
+   * Eager-load without claiming high fetch priority. On the phone's single
+   * column the LCP element is often tile 1 or 2, not tile 0 — a lazy LCP
+   * image is deprioritized by the browser and paints seconds late.
+   */
+  eager?: boolean;
+  /**
+   * Engagement counts (spec §3): same number on every tile of a multi-image
+   * post — by design, since counts are per-post, not per-media-index. Only
+   * rendered when the caller actually supplies them (bsky-source posts with
+   * a resolved `engagementFor` entry); omitted entirely for anything else.
+   */
+  likeCount?: number;
+  replyCount?: number;
+  /** Responsive renditions — browsers pick the smallest sufficient file. */
+  srcSet?: string;
+  sizes?: string;
+  /** ~16px webp data URI painted behind the img until the rendition decodes. */
+  blurDataUrl?: string | null;
 }) {
   const [revealed, setRevealed] = useState(false);
 
   const image = (
-    <div style={{ aspectRatio: `${width ?? 3}/${height ?? 2}` }}>
+    <div
+      style={{
+        aspectRatio: `${width ?? 3}/${height ?? 2}`,
+        // Blur-up: the tiny placeholder paints instantly as a background; the
+        // real <img> covers it the moment it decodes. Browser upscaling of a
+        // 16px source reads as a blur — no CSS filter needed.
+        ...(blurDataUrl
+          ? { backgroundImage: `url("${blurDataUrl}")`, backgroundSize: "cover" }
+          : {}),
+      }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
+        srcSet={srcSet}
+        sizes={sizes}
         alt={alt}
         width={width ?? undefined}
         height={height ?? undefined}
-        loading="lazy"
+        loading={priority || eager ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
         className="h-full w-full object-cover"
       />
     </div>
   );
+
+  const hasCounts = likeCount !== undefined || replyCount !== undefined;
+  const counts = hasCounts ? (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
+      <span className="text-xs text-zinc-400">
+        {likeCount !== undefined ? (
+          <span aria-label={`${likeCount} like${likeCount === 1 ? "" : "s"}`}>♥ {likeCount}</span>
+        ) : null}
+        {likeCount !== undefined && replyCount !== undefined ? " · " : null}
+        {replyCount !== undefined ? (
+          <span aria-label={`${replyCount} ${replyCount === 1 ? "comment" : "comments"}`}>💬 {replyCount}</span>
+        ) : null}
+      </span>
+    </div>
+  ) : null;
 
   // Sensitive + unrevealed: the tile IS the reveal button, not a Link —
   // nesting a <button> inside a <Link> would put two interactive elements
@@ -97,8 +153,9 @@ export function PhotoCard({
   }
 
   return (
-    <Link href={href} className="mb-4 block break-inside-avoid overflow-hidden rounded-md bg-zinc-900">
+    <Link href={href} className="relative mb-4 block break-inside-avoid overflow-hidden rounded-md bg-zinc-900">
       {image}
+      {counts}
     </Link>
   );
 }

@@ -6,6 +6,7 @@ primary_region = "iad"
 
 [env]
   HEALTH_PORT = "8080"
+  WARM_BASE_URL = "https://luminance.social"
 
 # The ingestor is a long-running Jetstream (websocket) consumer, not a
 # request-driven web service — it must not be scaled to zero for lack of

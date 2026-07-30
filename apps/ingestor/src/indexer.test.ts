@@ -1,23 +1,27 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDb, photos, photographers, tombstones, photoOverrides, series, seriesPhotos } from "@luminance/db";
+import { createTestDb, photos, photographers, tombstones, photoOverrides, series, seriesPhotos } from "@openphotos/db";
+import { OPENCONTENT_PHOTOGRAPH, OPENCONTENT_COLLECTION } from "@openphotos/lexicons";
 import { Indexer } from "./indexer.js";
 
 const DID = "did:plc:kevin";
+// social.luminance.portfolio.{photo,series} were retired 2026-07-28 (zero
+// records ever existed in the wild); these fixtures now exercise their
+// structural successor, social.opencontent.{photograph,collection}.
 const photoEvt = (rkey: string, op: "create" | "delete" = "create") => ({
   did: DID, time_us: 1, kind: "commit" as const,
-  commit: { operation: op, collection: "social.luminance.portfolio.photo", rkey, cid: "bafyrec",
-    record: op === "create" ? { image: { $type: "blob", ref: { $link: `bafk-${rkey}` }, mimeType: "image/jpeg", size: 1 }, createdAt: "2026-07-01T00:00:00Z" } : undefined },
+  commit: { operation: op, collection: OPENCONTENT_PHOTOGRAPH, rkey, cid: "bafyrec",
+    record: op === "create" ? { image: { $type: "blob", ref: { $link: `bafk-${rkey}` }, mimeType: "image/jpeg", size: 1 }, aspectRatio: { width: 100, height: 100 }, createdAt: "2026-07-01T00:00:00Z" } : undefined },
 });
-// generic luminance photo create/update event with a custom record body (for asserting upsert field coverage)
+// generic opencontent photograph create/update event with a custom record body (for asserting upsert field coverage)
 const photoRecordEvt = (rkey: string, record: Record<string, unknown>, op: "create" | "update" = "create") => ({
   did: DID, time_us: 1, kind: "commit" as const,
-  commit: { operation: op, collection: "social.luminance.portfolio.photo", rkey, cid: "bafyrec", record },
+  commit: { operation: op, collection: OPENCONTENT_PHOTOGRAPH, rkey, cid: "bafyrec", record },
 });
 const seriesEvt = (rkey: string, over: Record<string, unknown>, op: "create" | "update" = "create") => ({
   did: DID, time_us: 1, kind: "commit" as const,
-  commit: { operation: op, collection: "social.luminance.portfolio.series", rkey, cid: "bafyrec",
-    record: { title: "S", photos: [], createdAt: "2026-07-01T00:00:00Z", ...over } },
+  commit: { operation: op, collection: OPENCONTENT_COLLECTION, rkey, cid: "bafyrec",
+    record: { title: "S", items: [], createdAt: "2026-07-01T00:00:00Z", ...over } },
 });
 const galleryEvt = (rkey: string, over: Record<string, unknown> = {}, op: "create" | "update" = "create") => ({
   did: DID, time_us: 1, kind: "commit" as const,
@@ -42,7 +46,7 @@ describe("Indexer", () => {
     await db.insert(photographers).values({ did: DID, handle: "klee.photos" });
     ix = new Indexer(db);
   });
-  it("indexes a luminance photo create", async () => {
+  it("indexes an opencontent photograph create", async () => {
     await ix.handleEvent(photoEvt("p1"));
     expect((await db.select().from(photos))).toHaveLength(1);
   });
@@ -99,9 +103,9 @@ describe("Indexer", () => {
   });
 
   it("deleting a photo also removes seriesPhotos rows referencing it as photoUri", async () => {
-    const photoUri = `at://${DID}/social.luminance.portfolio.photo/p1`;
+    const photoUri = `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/p1`;
     await ix.handleEvent(photoEvt("p1"));
-    await ix.handleEvent(seriesEvt("s1", { photos: [{ uri: photoUri, cid: "bafyrec" }] }));
+    await ix.handleEvent(seriesEvt("s1", { items: [{ uri: photoUri, cid: "bafyrec" }] }));
     expect(await db.select().from(seriesPhotos)).toHaveLength(1);
 
     await ix.handleEvent(photoEvt("p1", "delete"));
@@ -133,12 +137,12 @@ describe("Indexer", () => {
     expect(row.license).toBe("cc-by");
   });
 
-  it("a luminance series update with photos:[] clears memberships; a grain gallery update leaves gallery.item memberships intact", async () => {
-    const photoUri = `at://${DID}/social.luminance.portfolio.photo/p1`;
+  it("an opencontent collection update with items:[] clears memberships; a grain gallery update leaves gallery.item memberships intact", async () => {
+    const photoUri = `at://${DID}/${OPENCONTENT_PHOTOGRAPH}/p1`;
     await ix.handleEvent(photoEvt("p1"));
-    await ix.handleEvent(seriesEvt("s1", { photos: [{ uri: photoUri, cid: "bafyrec" }] }));
+    await ix.handleEvent(seriesEvt("s1", { items: [{ uri: photoUri, cid: "bafyrec" }] }));
     expect(await db.select().from(seriesPhotos)).toHaveLength(1);
-    await ix.handleEvent(seriesEvt("s1", { photos: [] }, "update"));
+    await ix.handleEvent(seriesEvt("s1", { items: [] }, "update"));
     expect(await db.select().from(seriesPhotos)).toHaveLength(0);
 
     const galleryUri = `at://${DID}/social.grain.gallery/g1`;

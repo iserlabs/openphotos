@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { TestNetworkNoAppView } from "@atproto/dev-env";
 import type { AtpAgent } from "@atproto/api";
-import { createTestDb, photographers, photos } from "@luminance/db";
+import { createTestDb, photographers, photos } from "@openphotos/db";
 import { Indexer } from "../indexer.js";
 import { runBackfill } from "../backfill.js";
-import { LUMINANCE_PHOTO } from "@luminance/lexicons";
+import { OPENCONTENT_PHOTOGRAPH } from "@openphotos/lexicons";
 
 // ── Integration gate (spec §13) + rebuild drill (success criterion 3) ─────────
 // Writes REAL records into a REAL local PDS (@atproto/dev-env), really backfills
@@ -23,7 +23,7 @@ import { LUMINANCE_PHOTO } from "@luminance/lexicons";
 //     on localhost — which is exactly why we inject a test-local `fetchJson`
 //     (plain `fetch`) and `resolvePds` into runBackfill instead of the
 //     production `safeJsonFetch`, whose SSRF guard would (correctly) refuse it.
-//  4. `putRecord` uses `validate: false`: the luminance lexicon isn't registered
+//  4. `putRecord` uses `validate: false`: the opencontent lexicon isn't registered
 //     on the dev PDS. (Unknown NSIDs are skipped by the PDS's default validation
 //     anyway, but we're explicit.)
 
@@ -54,10 +54,14 @@ async function writePhoto(rkey: string) {
   const up = await agent.uploadBlob(img, { encoding: "image/jpeg" });
   await agent.com.atproto.repo.putRecord({
     repo: did,
-    collection: LUMINANCE_PHOTO,
+    collection: OPENCONTENT_PHOTOGRAPH,
     rkey,
-    validate: false, // luminance lexicon isn't registered on the dev PDS
-    record: { $type: LUMINANCE_PHOTO, image: up.data.blob, createdAt: new Date().toISOString() },
+    validate: false, // opencontent lexicon isn't registered on the dev PDS
+    record: {
+      $type: OPENCONTENT_PHOTOGRAPH, image: up.data.blob,
+      aspectRatio: { width: 1, height: 1 },
+      createdAt: new Date().toISOString(),
+    },
   });
 }
 
@@ -86,12 +90,12 @@ describe("foundation end-to-end (dev-env)", () => {
     expect(ph.backfillStatus).toBe("complete");
 
     // ── Live delete ──────────────────────────────────────────────────────────
-    await agent.com.atproto.repo.deleteRecord({ repo: did, collection: LUMINANCE_PHOTO, rkey: "p1" });
+    await agent.com.atproto.repo.deleteRecord({ repo: did, collection: OPENCONTENT_PHOTOGRAPH, rkey: "p1" });
     await indexer.handleEvent({
       did,
       time_us: Date.now() * 1000,
       kind: "commit",
-      commit: { operation: "delete", collection: LUMINANCE_PHOTO, rkey: "p1" },
+      commit: { operation: "delete", collection: OPENCONTENT_PHOTOGRAPH, rkey: "p1" },
     });
     expect(await db.select().from(photos)).toHaveLength(1);
 

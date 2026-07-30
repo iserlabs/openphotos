@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photographers, photoOverrides, photos, series, seriesPhotos } from "@luminance/db";
+import { createTestDb, photographers, photoOverrides, photos, series, seriesPhotos } from "@openphotos/db";
 import { eq } from "drizzle-orm";
 import {
   completeRegistration,
@@ -54,7 +54,7 @@ describe("registration logic", () => {
     ]);
     await db.insert(series).values([
       { atUri: galleryUri, did: "did:plc:k", title: "Grain gallery" },
-      { atUri: lumSeriesUri, did: "did:plc:k", title: "Luminance series" },
+      { atUri: lumSeriesUri, did: "did:plc:k", title: "OpenPhotos series" },
     ]);
     await db.insert(seriesPhotos).values([
       { seriesUri: galleryUri, photoUri: "at://did:plc:k/social.grain.photo/1", position: 0 },

@@ -7,6 +7,8 @@ import { defineConfig, configDefaults } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // PGlite cold-start headroom on CI runners (same as apps/web).
+    testTimeout: 20_000,
     exclude: [...configDefaults.exclude, "src/integration/**"],
   },
 });

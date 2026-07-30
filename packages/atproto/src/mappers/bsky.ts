@@ -3,12 +3,24 @@ import { clampSortAt } from "./luminance.js";
 
 export function mapBskyPost(ctx: Ctx, record: any): MappedPhoto[] {
   if (record?.reply) return []; // conversation, not portfolio (spec §7)
-  if (record?.embed?.$type !== "app.bsky.embed.images") return []; // also excludes recordWithMedia (v1)
+  // Two image-carrying embed shapes exist: the classic 4-image
+  // app.bsky.embed.images ({images: [...]}) and the newer 10-image
+  // app.bsky.embed.gallery ({items: [...]}). Item fields (image/alt/
+  // aspectRatio) are identical. Everything else (recordWithMedia, video,
+  // external) is skipped in v1.
+  const embedType = record?.embed?.$type;
+  const images =
+    embedType === "app.bsky.embed.images"
+      ? record.embed.images
+      : embedType === "app.bsky.embed.gallery"
+        ? record.embed.items
+        : null;
+  if (!Array.isArray(images)) return [];
   const uri = atUri(ctx);
   const createdAt = parseDate(record.createdAt);
   const labels = selfLabelVals(record.labels);
   const rows: MappedPhoto[] = [];
-  (record.embed.images ?? []).forEach((img: any, i: number) => {
+  images.forEach((img: any, i: number) => {
     const cid = blobCid(img?.image);
     if (!cid) return;
     rows.push({

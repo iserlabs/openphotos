@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { WebSocketServer } from "ws";
-import { createTestDb, ingestCursors } from "@luminance/db";
+import { createTestDb, ingestCursors } from "@openphotos/db";
 import { JetstreamConsumer } from "./jetstream.js";
 
 let wss: WebSocketServer; let consumer: JetstreamConsumer;
@@ -155,4 +155,97 @@ describe("JetstreamConsumer", () => {
     await new Promise((r) => setTimeout(r, 2500)); // > worst-case initial backoff (1000ms + 500ms jitter)
     expect(connCount).toBe(countAfterStop); // no reconnect opened a new connection after stop()
   }, 6000);
+});
+
+describe("JetstreamConsumer hardening", () => {
+  it("replays a handler-failed event from the cursor instead of skipping it (I6)", async () => {
+    const db = await createTestDb();
+    const url = fakeJetstream((/* every new connection re-sends the event */) => {
+      setTimeout(() => {
+        (wss as any).lastSocket?.send(JSON.stringify({ did: "did:plc:kevin", time_us: 111, kind: "commit", commit: { operation: "create", collection: "c", rkey: "r", record: {} } }));
+      }, 50);
+    });
+    let attempts = 0;
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: ["c"],
+      getDids: async () => ["did:plc:kevin"],
+      onEvent: async () => {
+        attempts++;
+        if (attempts === 1) throw new Error("transient handler failure");
+      },
+      onStaleCursor: async () => {},
+    });
+    await consumer.start();
+    // First delivery fails -> socket drops -> reconnect (~1-1.5s backoff) -> replay succeeds.
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(attempts).toBe(2);
+    const [cur] = await db.select().from(ingestCursors);
+    expect(cur.timeUs).toBe(111n);
+  }, 15_000);
+
+  it("skips a poison event (cursor advanced past it) after repeated replay failures", async () => {
+    const db = await createTestDb();
+    const url = fakeJetstream(() => {
+      setTimeout(() => {
+        (wss as any).lastSocket?.send(JSON.stringify({ did: "did:plc:kevin", time_us: 222, kind: "commit", commit: { operation: "create", collection: "c", rkey: "r", record: {} } }));
+      }, 50);
+    });
+    let attempts = 0;
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: ["c"],
+      getDids: async () => ["did:plc:kevin"],
+      onEvent: async () => {
+        attempts++;
+        throw new Error("poison event");
+      },
+      onStaleCursor: async () => {},
+    });
+    await consumer.start();
+    // Two replay cycles (backoff 1s then 2s + jitter), third failure skips.
+    await new Promise((r) => setTimeout(r, 6000));
+    expect(attempts).toBe(3);
+    const [cur] = await db.select().from(ingestCursors);
+    expect(cur.timeUs).toBe(222n); // advanced PAST the poison event, explicitly
+  }, 15_000);
+
+  it("closes the socket when the registry drains to zero (never an empty-wantedDids options_update)", async () => {
+    const db = await createTestDb();
+    const received: string[] = [];
+    const url = fakeJetstream();
+    wss.on("connection", (ws) => { ws.on("message", (d) => received.push(d.toString())); });
+    let dids = ["did:plc:kevin"];
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: ["c"],
+      getDids: async () => dids,
+      onEvent: async () => {},
+      onStaleCursor: async () => {},
+      didPollIntervalMs: 100,
+    });
+    await consumer.start();
+    await new Promise((r) => setTimeout(r, 150));
+    expect((wss as any).lastSocket.readyState).toBe(1); // OPEN
+    dids = []; // last photographer deregisters
+    await new Promise((r) => setTimeout(r, 400));
+    expect((wss as any).lastSocket.readyState).toBeGreaterThanOrEqual(2); // CLOSING/CLOSED
+    // The drain must never have been signaled via an options_update with empty wantedDids.
+    const emptyUpdate = received.find((m) => m.includes('"wantedDids":[]'));
+    expect(emptyUpdate).toBeUndefined();
+  }, 15_000);
+
+  it("connectionHealthy() is true on a live socket and false after stop()", async () => {
+    const db = await createTestDb();
+    const url = fakeJetstream();
+    consumer = new JetstreamConsumer({
+      db, url, connectionId: "main", collections: ["c"],
+      getDids: async () => ["did:plc:kevin"],
+      onEvent: async () => {},
+      onStaleCursor: async () => {},
+    });
+    await consumer.start();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(consumer.connectionHealthy()).toBe(true);
+    await consumer.stop();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(consumer.connectionHealthy()).toBe(false);
+  });
 });

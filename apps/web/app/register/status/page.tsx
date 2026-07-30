@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { photographers } from "@luminance/db";
+import { photographers } from "@openphotos/db";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "Indexing status — Luminance",
+  title: "Indexing status — OpenPhotos",
 };
 
 // Reads the session + live DB per request; never cached.

@@ -1,5 +1,5 @@
 import { and, eq, inArray, like } from "drizzle-orm";
-import { photographers, photos, photoOverrides, series, seriesPhotos, type Db } from "@luminance/db";
+import { photographers, photos, photoOverrides, series, seriesPhotos, type Db } from "@openphotos/db";
 
 /**
  * Grain galleries are the only `series` rows sourced from a toggle-able source.

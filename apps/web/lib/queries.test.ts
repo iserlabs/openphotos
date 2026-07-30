@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTestDb, photos, photographers, photoOverrides, series, seriesPhotos } from "@luminance/db";
+import { createTestDb, photos, photographers, photoOverrides, series, seriesPhotos } from "@openphotos/db";
 import { getPhotoRecord, getPhotographerByHandle, getSeries } from "./queries";
 
 describe("queries", () => {

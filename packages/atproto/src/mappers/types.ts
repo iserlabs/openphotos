@@ -1,4 +1,4 @@
-export type PhotoSource = "luminance" | "bsky" | "grain";
+export type PhotoSource = "luminance" | "bsky" | "grain" | "opencontent";
 export interface Ctx { did: string; collection: string; rkey: string; cid: string; indexedAt: Date }
 export interface MappedPhoto {
   atUri: string; mediaIndex: number; did: string; source: PhotoSource;

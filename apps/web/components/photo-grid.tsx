@@ -15,6 +15,7 @@ export interface GridPhoto {
   width: number | null;
   height: number | null;
   labels: string[];
+  blurDataUrl: string | null;
 }
 
 /**
@@ -23,21 +24,48 @@ export interface GridPhoto {
  * `#i{mediaIndex}` anchor so a tap on one image of a multi-image post lands
  * on that image specifically.
  */
-export function PhotoGrid({ items }: { items: GridPhoto[] }) {
+export function PhotoGrid({
+  items,
+  counts,
+}: {
+  items: GridPhoto[];
+  /**
+   * Engagement counts keyed by post at-uri (spec §3) — one entry serves
+   * every mediaIndex tile of the same post. Callers fetch this with a
+   * SINGLE `engagementFor` call per page render (never per-tile); omitted
+   * entirely (or missing a given key) simply renders that tile without an
+   * overlay.
+   */
+  counts?: Map<string, { likeCount: number; replyCount: number }>;
+}) {
   return (
-    <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
-      {items.map((p) => {
+    // `block` (not `columns-1`) below sm: one column needs no fragmentation
+    // context, and plain flow renders identically. (Tested as a fix for
+    // Lighthouse's ~4s LCP render-delay attribution on throttled mobile — it
+    // did NOT move it, so that lag is Chrome paint scheduling, not multicol.
+    // Kept anyway: less layout machinery for the same pixels.)
+    <div className="block gap-4 sm:columns-2 lg:columns-3">
+      {items.map((p, i) => {
         const parts = splitAtUri(p.atUri);
         if (!parts) return null;
+        const c = counts?.get(p.atUri);
+        const imgBase = `/img/${encodeURIComponent(p.did)}/${encodeURIComponent(p.blobCid)}`;
         return (
           <PhotoCard
             key={`${p.atUri}#${p.mediaIndex}`}
             href={`/photo/${encodeURIComponent(parts.did)}/${parts.collection}/${parts.rkey}#i${p.mediaIndex}`}
-            src={`/img/${encodeURIComponent(p.did)}/${encodeURIComponent(p.blobCid)}/feed`}
+            src={`${imgBase}/feed`}
+            srcSet={`${imgBase}/thumb 512w, ${imgBase}/grid 768w, ${imgBase}/feed 1024w`}
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             alt={p.alt ?? ""}
             width={p.width}
             height={p.height}
             sensitive={isSensitive(p.labels)}
+            priority={i < 2}
+            eager={i >= 2 && i < 4}
+            blurDataUrl={p.blurDataUrl}
+            likeCount={c?.likeCount}
+            replyCount={c?.replyCount}
           />
         );
       })}

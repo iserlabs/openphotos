@@ -1,9 +1,10 @@
 import { NodeOAuthClient, type NodeSavedSession, type NodeSavedState } from "@atproto/oauth-client-node";
 import { JoseKey } from "@atproto/jwk-jose";
 import { eq } from "drizzle-orm";
-import { oauthStates, oauthSessions, type Db } from "@luminance/db";
-import { resolvePdsEndpoint, safeJsonFetch } from "@luminance/atproto";
+import { oauthStates, oauthSessions, type Db } from "@openphotos/db";
+import { resolvePdsEndpoint, safeJsonFetch } from "@openphotos/atproto";
 import { env } from "./env";
+import { encodeAppState, type AppState } from "./oauth-state";
 
 /**
  * Build the client metadata document. Derived entirely from `env.PUBLIC_URL` so
@@ -16,12 +17,33 @@ function clientMetadata() {
   const base = env.PUBLIC_URL;
   return {
     client_id: `${base}/oauth/client-metadata.json`,
-    client_name: "Luminance",
+    client_name: "OpenPhotos",
     client_uri: base,
     redirect_uris: [`${base}/oauth/callback`] as [string],
     grant_types: ["authorization_code", "refresh_token"] as ["authorization_code", "refresh_token"],
     response_types: ["code"] as ["code"],
-    scope: "atproto",
+    // "atproto" alone only establishes identity -- @atproto/oauth-scopes'
+    // granular ScopePermissionsTransition model (see @atproto/pds's
+    // auth-verifier, which enforces it) gates createRecord/deleteRecord/
+    // uploadBlob on the additional `transition:generic` scope, and rejects
+    // writes from a bare-`atproto` session with ScopeMissingError. Our
+    // writes (interactions.ts, photo/actions.ts, register/actions.ts) work
+    // today only because granular enforcement is unevenly rolled out across
+    // the PDS fleet (bsky Aug-2025 discussion #4118) -- a ticking defect,
+    // not a guarantee. `transition:generic` is the same package's
+    // documented backward-compat scope restoring the older full-account
+    // access a plain scope string used to imply, which is exactly what
+    // every write path here needs.
+    //
+    // Pre-fix sessions keep their narrower grant until they re-auth, so a
+    // ScopeMissingError from a not-yet-re-authed session is a real,
+    // reachable path even after this change. `interactions.ts`'s
+    // `isScopeOrAuthError` detects that exact rejection (verified against
+    // the installed @atproto/pds + @atproto/oauth-scopes + @atproto/xrpc
+    // sources) and every write path there routes it through
+    // SESSION_EXPIRED_ERROR -- i.e. re-login, the only actual remedy. This
+    // routing is real as of that change, not aspirational.
+    scope: "atproto transition:generic",
     application_type: "web" as const,
     token_endpoint_auth_method: "private_key_jwt" as const,
     token_endpoint_auth_signing_alg: "ES256",
@@ -30,15 +52,41 @@ function clientMetadata() {
   };
 }
 
+// Memoized client, gated on reference-equality of the `db` argument (not a
+// computed key). The state/session stores below close over `db` directly --
+// they don't just take it as a one-off parameter, they read through it on
+// every call for the client's whole lifetime -- so a cached client is only
+// safe to hand back when the *exact same* `db` instance is passed again. In
+// production every call site (see apps/web/lib/db.ts's `getDb()`) resolves
+// through the same module-level `db ??= createDb(...)` singleton, so this
+// reference check hits on effectively every call, same as if we'd keyed on
+// nothing at all. It only rebuilds when a genuinely different `db` shows up
+// (e.g. a fresh per-test db), which is the correct behavior there too:
+// reusing a client built against a stale/different db would silently read
+// and write OAuth state through the wrong connection.
+let cachedOAuthClient: { db: Db; client: NodeOAuthClient } | undefined;
+
 /**
- * Construct a per-request OAuth client. Built lazily (never at module load) so
- * the app builds with zero env vars — `env.*` and `OAUTH_JWK_1` are only read
- * when a real OAuth request comes in. State/session are persisted in Postgres
- * via the Drizzle-backed SimpleStores below so the flow survives across the
- * stateless serverless requests of the authorize -> callback round-trip.
+ * Construct (or reuse) the OAuth client. Built lazily (never at module load)
+ * so the app builds with zero env vars — `env.*` and `OAUTH_JWK_1` are only
+ * read when a real OAuth request comes in. State/session are persisted in
+ * Postgres via the Drizzle-backed SimpleStores below so the flow survives
+ * across the stateless serverless requests of the authorize -> callback
+ * round-trip.
+ *
+ * Memoized (see {@link cachedOAuthClient}) rather than rebuilt on every
+ * call: `@atproto/oauth-client`'s DPoP-nonce cache lives ON the client
+ * instance (an in-memory `SimpleStoreMemory`, per its own source), not in
+ * our Postgres stores. A fresh `NodeOAuthClient` per call means a fresh,
+ * empty nonce cache every time, forcing a nonce-discovery round trip on
+ * every authenticated PDS request instead of just the first (same defect
+ * class openportfolio's `apps/site/lib/oauth.ts` hit and fixed with its own
+ * config-keyed cache). This app's client config (env vars) is fixed for the
+ * process lifetime, so reusing one client for the process's life is safe.
  */
 export async function getOAuthClient(db: Db): Promise<NodeOAuthClient> {
-  return new NodeOAuthClient({
+  if (cachedOAuthClient?.db === db) return cachedOAuthClient.client;
+  const client = new NodeOAuthClient({
     clientMetadata: clientMetadata(),
     keyset: [await JoseKey.fromImportable(env.OAUTH_JWK_1)],
     stateStore: {
@@ -72,6 +120,32 @@ export async function getOAuthClient(db: Db): Promise<NodeOAuthClient> {
       },
     },
   });
+  cachedOAuthClient = { db, client };
+  return client;
+}
+
+/**
+ * Start the OAuth authorize redirect for `handle`, carrying `appState` (mode +
+ * optional returnTo) through the round-trip.
+ *
+ * VERIFY-API (Task 4): the installed `@atproto/oauth-client-node@0.4.9`
+ * (via `@atproto/oauth-client@0.7.11`) natively supports an app-defined
+ * `state` string on `authorize(handle, { state })` — see
+ * `node_modules/.pnpm/@atproto+oauth-client@0.7.11/node_modules/@atproto/oauth-client/dist/oauth-client.js`:
+ * `authorize()` stores our `state` value as `appState` inside the *same*
+ * nonce-keyed record it already writes to `stateStore` (backed by the
+ * existing `oauthStates` Drizzle/JSONB table below) alongside the PKCE
+ * verifier and DPoP key, and `callback()` returns it verbatim as
+ * `{ session, state }`. So the encoded `AppState` never leaves our own
+ * server and needs no new table, column, or cookie — it rides inside the
+ * OAuth library's own state-store row for the lifetime of the flow.
+ */
+export async function authorizeWithState(
+  client: NodeOAuthClient,
+  handle: string,
+  appState: AppState,
+): Promise<URL> {
+  return client.authorize(handle, { state: encodeAppState(appState) });
 }
 
 /** Public client-metadata document, for the `/oauth/client-metadata.json` route. */
@@ -92,7 +166,7 @@ export async function getPublicJwks() {
 /**
  * Resolve a DID's current handle via `com.atproto.repo.describeRepo` on its own
  * PDS (located through the DID document). Uses the SSRF-guarded fetch from
- * `@luminance/atproto`. Used at registration time to fill the photographer's
+ * `@openphotos/atproto`. Used at registration time to fill the photographer's
  * handle column.
  */
 export async function resolveHandle(did: string): Promise<string> {
