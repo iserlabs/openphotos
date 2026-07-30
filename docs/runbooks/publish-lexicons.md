@@ -5,10 +5,11 @@ Scope: this runbook publishes the lexicon(s) we own —
 - `social.luminance.actor.profile` — `packages/lexicons/lexicons/social/luminance/actor/profile.json`
 
 `social.luminance.portfolio.{photo,series}` were **retired 2026-07-28** (zero
-records ever existed in the wild) — their schema files were deleted from this
-repo and their published `com.atproto.lexicon.schema` records were removed
-from the authority repo. See §7 ("Unpublishing `social.luminance.portfolio.*`")
-for how that was done; the sections below now apply to `actor.profile` only.
+records ever existed in the wild) — their schema files, mappers, and watched-
+collection entries were deleted from this repo. Deleting their published
+`com.atproto.lexicon.schema` records from the authority repo is **still an
+open task** — see §7 ("Unpublishing `social.luminance.portfolio.*`") for the
+procedure. The sections below apply to `actor.profile` only.
 
 `packages/lexicons/lexicons/com/atproto/**` (`label/defs.json`, `repo/strongRef.json`) is
 **vendored** — copies of upstream Bluesky/ATProto lexicons we depend on for refs, not
@@ -195,6 +196,10 @@ the manual `putRecord` loop — `putRecord` is create-or-update by rkey) so the
 published records match what's in the repo.
 
 ## 7. Unpublishing `social.luminance.portfolio.*`
+
+> **Status (2026-07-30): OPEN.** The code-side retirement shipped 2026-07-28;
+> the `goat lex unpublish` below has not been run yet — the two stale
+> `com.atproto.lexicon.schema` records are still in the authority repo.
 
 `social.luminance.portfolio.photo` and `social.luminance.portfolio.series`
 were retired 2026-07-28: zero records of either type ever existed in the

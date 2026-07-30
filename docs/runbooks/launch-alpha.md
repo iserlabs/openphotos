@@ -1,5 +1,11 @@
 # Runbook: Alpha launch checklist
 
+> **Status (2026-07-30):** executed in full 2026-07-22 — the alpha is live
+> (see `docs/TODO.md` §1 for the as-run record, including launch-day
+> incidents). Kept as the reference procedure for re-provisioning, disaster
+> recovery, or standing up a second environment; facts below are updated to
+> the current state of the repo.
+
 Ordered, top-to-bottom checklist for taking `feature/foundation` from merged
 code to a live `luminance.social` alpha with real registered photographers.
 Work through it in order — later steps assume earlier ones are done (e.g. the
@@ -33,13 +39,15 @@ from step 3 already running).
    DATABASE_URL="<neon-connection-string>" pnpm --filter @openphotos/db exec drizzle-kit migrate
    ```
 
-   This applies `packages/db/migrations/0000_init.sql` and
-   `packages/db/migrations/0001_series_item_uri.sql` (config:
-   `packages/db/drizzle.config.ts`, schema `packages/db/src/schema.ts`).
+   This applies everything under `packages/db/migrations/` — `0000`–`0006` as
+   of 2026-07-30 (config: `packages/db/drizzle.config.ts`, schema
+   `packages/db/src/schema.ts`).
 
 3. Verify: connect with `psql "$DATABASE_URL"` and confirm the tables exist —
    `photographers`, `photo_overrides`, `oauth_states`, `oauth_sessions`,
-   `ingest_cursors`, `tombstones`, `photos`, `series`, `series_photos`.
+   `ingest_cursors`, `tombstones`, `photos`, `series`, `series_photos`, plus
+   the phase-2/3 additions `interactions`, `engagement`, `notifications`,
+   `admin_audit` (`\dt` should match the tables in `schema.ts`).
 
 4. **Backup note (no action needed):** Neon's point-in-time recovery is a
    project-level setting, on by default, and it's what backs up the durable
@@ -51,12 +59,12 @@ from step 3 already running).
 
 ## 2. Vercel project + environment variables
 
-1. Import the repo into a new Vercel project. Leave **Root Directory** at the
-   repo root — `vercel.json` at the repo root already scopes install/build to
-   the web app (`"installCommand": "pnpm install"`,
-   `"buildCommand": "pnpm --filter web build"`), which needs the full pnpm
-   workspace present to resolve `@openphotos/db`, `@openphotos/atproto`,
-   `@openphotos/lexicons`.
+1. Import the repo into a new Vercel project with **Root Directory** set to
+   `apps/web` (how the live `luminance-social` project is configured).
+   `apps/web/vercel.json` sets the build command to
+   `cd ../.. && pnpm --filter web... build`, hopping back to the monorepo root
+   so pnpm can resolve `@openphotos/db`, `@openphotos/atproto`,
+   `@openphotos/lexicons` from the workspace.
 
 2. Set every variable from `apps/web/.env.example` in Project Settings →
    Environment Variables (Production, and Preview if you want preview
@@ -75,7 +83,7 @@ from step 3 already running).
    `apps/web/.env.example`, run it fresh for production):
 
    ```bash
-   node --input-type=module -e 'import {JoseKey} from "@atproto/jwk-jose"; import {randomUUID} from "node:crypto"; const k=await JoseKey.generate(["ES256"], `luminance-${randomUUID()}`); console.log(JSON.stringify({...k.privateJwk, alg:"ES256"}))'
+   node --input-type=module -e 'import {JoseKey} from "@atproto/jwk-jose"; import {randomUUID} from "node:crypto"; const k=await JoseKey.generate(["ES256"], `openphotos-${randomUUID()}`); console.log(JSON.stringify({...k.privateJwk, alg:"ES256"}))'
    ```
 
 3. Trigger a deploy (push to `main`, or `vercel --prod` from the CLI). Confirm
@@ -113,8 +121,9 @@ to Fly (`apps/ingestor/fly.toml`, app name `luminance-ingestor`).
 
 4. First deploy, run from the **repo root** (the Dockerfile's build context
    must be the monorepo root so pnpm/turbo can resolve the workspace
-   packages — see the comment at the top of `apps/ingestor/Dockerfile`). This
-   is the same invocation `.github/workflows/deploy-ingestor.yml` uses:
+   packages — see the comment at the top of `apps/ingestor/Dockerfile`). Same
+   invocation `.github/workflows/deploy-ingestor.yml` uses (CI adds
+   `--remote-only`):
 
    ```bash
    fly deploy --config apps/ingestor/fly.toml --dockerfile apps/ingestor/Dockerfile
@@ -132,7 +141,9 @@ to Fly (`apps/ingestor/fly.toml`, app name `luminance-ingestor`).
    keep one machine always up — expected, this is a websocket consumer, not a
    request-driven service that should scale to zero.
 
-6. For subsequent deploys to happen automatically on push to `main`, add
+6. For subsequent deploys to happen automatically after a **green CI run on
+   `main`** (the workflow is `workflow_run`-gated on `ci`, not fired directly
+   on push), add
    `FLY_API_TOKEN` (from `fly tokens create deploy --config apps/ingestor/fly.toml`,
    or the Fly dashboard) as a GitHub Actions repo secret — the existing
    `.github/workflows/deploy-ingestor.yml` workflow already reads it and only
@@ -155,8 +166,9 @@ serves no public user traffic.
 
 Separate concern, separate runbook: `docs/runbooks/publish-lexicons.md`. Do
 this once `luminance.social` DNS (step 4) is under your control, since it
-adds two more TXT records (`_lexicon.actor.luminance.social` and
-`_lexicon.portfolio.luminance.social`) at the same DNS host. Not required for
+adds a TXT record (`_lexicon.actor.luminance.social`; the former
+`_lexicon.portfolio.luminance.social` authority was retired with
+`social.luminance.portfolio.*` on 2026-07-28) at the same DNS host. Not required for
 the app itself to function — the `social.luminance.*` lexicons are consumed
 directly from the JSON files via `@openphotos/lexicons` — but required for the
 NSIDs to resolve for anyone (or anything) else on the network.
@@ -253,8 +265,8 @@ npx lighthouse "https://luminance.social/photo/<did>/<collection>/<rkey>" --pres
 ```
 
 Pick a real photo's URL for the second run — the route triple is the AT-URI
-(`did`, `collection` e.g. `social.luminance.portfolio.photo` or
-`app.bsky.feed.post`, `rkey`); copy one from `/api/feed` output or from a
+(`did`, `collection` e.g. `app.bsky.feed.post` or
+`social.opencontent.photograph`, `rkey`); copy one from `/api/feed` output or from a
 profile grid link. Chrome DevTools' Lighthouse panel or
 <https://pagespeed.web.dev/> work equally well if you'd rather not use the CLI.
 
