@@ -80,7 +80,7 @@ let cachedOAuthClient: { db: Db; client: NodeOAuthClient } | undefined;
  * our Postgres stores. A fresh `NodeOAuthClient` per call means a fresh,
  * empty nonce cache every time, forcing a nonce-discovery round trip on
  * every authenticated PDS request instead of just the first (same defect
- * class open-portfolio's `apps/site/lib/oauth.ts` hit and fixed with its own
+ * class openportfolio's `apps/site/lib/oauth.ts` hit and fixed with its own
  * config-keyed cache). This app's client config (env vars) is fixed for the
  * process lifetime, so reusing one client for the process's life is safe.
  */

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the `social.opencontent.*` lexicon commons, the self-hostable ATProto portfolio framework (`iserlabs/open-portfolio`), Luminance's adoption of the commons, and the klee.photos flagship deployment.
+**Goal:** Ship the `social.opencontent.*` lexicon commons, the self-hostable ATProto portfolio framework (`iserlabs/openportfolio`), Luminance's adoption of the commons, and the klee.photos flagship deployment.
 
 **Architecture:** One Next.js 16 app (admin CMS + public portfolio) reading/writing the owner's own ATProto repo, composed via docker-compose with the unmodified reference PDS behind caddy. Luminance indexes the new vocabulary as one aggregator among many. Spec: `docs/superpowers/specs/2026-07-28-opencontent-portfolio-design.md` — the plan implements it exactly; where this plan and the spec disagree, the spec governs.
 
@@ -25,7 +25,7 @@
 - **G1 (before Part D):** Kevin provisions the staging VPS + a scratch hostname pair (apex + `pds.`) pointed at it.
 - **G2 (cutover):** Kevin flips klee.photos DNS at acceptance; Format stays as rollback.
 
-New repo location: `~/workspace/iserlabs/applications/open-portfolio` (GitHub `iserlabs/open-portfolio`, created in Task A1).
+New repo location: `~/workspace/iserlabs/applications/openportfolio` (GitHub `iserlabs/openportfolio`, created in Task A1).
 
 ---
 
@@ -34,7 +34,7 @@ New repo location: `~/workspace/iserlabs/applications/open-portfolio` (GitHub `i
 ### Task A1: Repo scaffold
 
 **Files:**
-- Create: `~/workspace/iserlabs/applications/open-portfolio/` — `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `apps/site/` (Next.js 16 app: `package.json`, `next.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/page.tsx`, `postcss.config.mjs`, `app/globals.css`), `packages/lexicons/` (`package.json`, `tsconfig.json`, `src/index.ts`), `.github/workflows/ci.yml`, `.gitignore`, `README.md`
+- Create: `~/workspace/iserlabs/applications/openportfolio/` — `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `apps/site/` (Next.js 16 app: `package.json`, `next.config.ts`, `tsconfig.json`, `app/layout.tsx`, `app/page.tsx`, `postcss.config.mjs`, `app/globals.css`), `packages/lexicons/` (`package.json`, `tsconfig.json`, `src/index.ts`), `.github/workflows/ci.yml`, `.gitignore`, `README.md`
 
 **Interfaces:**
 - Produces: workspace commands `pnpm build`, `pnpm test`, `pnpm typecheck` (turbo across `apps/site` + `packages/lexicons`); `apps/site` renders a placeholder page.
@@ -60,7 +60,7 @@ jobs:
 ```
 
 - [ ] **Step 3: Verify** — `pnpm build && pnpm typecheck && pnpm test` (vitest `--passWithNoTests`) all exit 0.
-- [ ] **Step 4: Create GitHub repo + push** — `gh repo create iserlabs/open-portfolio --private --source . --push` (private until release; Kevin flips visibility at productization).
+- [ ] **Step 4: Create GitHub repo + push** — `gh repo create iserlabs/openportfolio --private --source . --push` (private until release; Kevin flips visibility at productization).
 - [ ] **Step 5: Commit** any stragglers; CI green on GitHub.
 
 ### Task A2: Lexicon schemas + record builders
@@ -124,7 +124,7 @@ Note (spec §3 exif contract): `fNumber` is a **string** in the lexicon (lexicon
 
 - [ ] **Step 2: Failing schema tests** — `schemas.test.ts`: load all JSONs into `new Lexicons()` from `@atproto/lexicon`; `lex.assertValidRecord("social.opencontent.photograph", validFixture)` passes; fixtures violating each constraint (SVG mime, missing aspectRatio, 501-item collection, non-self site rkey is builder-level) throw. Run: fails (files don't exist yet ordering — write JSONs in step 1 makes these pass immediately; acceptable — the failing phase is the fixtures for `records.ts`).
 - [ ] **Step 3: `records.ts` builders + failing tests** — grapheme counting via `Intl.Segmenter` (copy `graphemeLength` from `~/workspace/luminance.social/packages/atproto/src/interaction-records.ts`); builders fill `$type` + `createdAt` (ISO now unless supplied), validate every spec limit, reject `items.length > 500`, reject links >10, reject unknown mime for `image.mimeType`. Tests: happy path per type; one violation per limit; `buildSite` output's rkey convention documented (`self` used by callers).
-- [ ] **Step 4: Run** — `pnpm --filter @open-portfolio/lexicons test` → all pass.
+- [ ] **Step 4: Run** — `pnpm --filter @openportfolio/lexicons test` → all pass.
 - [ ] **Step 5: Commit** — `feat(lexicons): social.opencontent.* v1 schemas + validated record builders`
 
 ### Task A3: EXIF/IPTC prefill + GPS strip

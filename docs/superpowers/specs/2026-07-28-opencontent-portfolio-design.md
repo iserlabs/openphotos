@@ -7,7 +7,7 @@ _Approved through section-by-section review 2026-07-25 → 2026-07-28. Supersede
 Two deliverables, one thesis:
 
 1. **The `social.opencontent.*` vocabulary** — a BDFL-governed lexicon commons for user-generated content, anchored at the (to-be-registered) domain **opencontent.social**. Kevin defines and evolves it under published rules; anyone may adopt it; governance can transfer later by transferring the domain + steward account (NSIDs never change).
-2. **The portfolio framework — named "open-portfolio"** (repo `iserlabs/open-portfolio`; the name is brand-only — the namespace is governance-independent, so even this can change without schema impact): a self-hostable, ATProto-native portfolio CMS. One Next.js app (admin CMS + public site) composed with the unmodified reference PDS. The owner's portfolio lives as `social.opencontent.*` records in their own repo; the app is a writer/renderer, never a silo.
+2. **The portfolio framework — named "openportfolio"** (repo `iserlabs/openportfolio`; the name is brand-only — the namespace is governance-independent, so even this can change without schema impact): a self-hostable, ATProto-native portfolio CMS. One Next.js app (admin CMS + public site) composed with the unmodified reference PDS. The owner's portfolio lives as `social.opencontent.*` records in their own repo; the app is a writer/renderer, never a silo.
 
 **Flagship:** klee.photos rebuilt on the framework — self-hosted PDS at `pds.klee.photos`, Kevin's **new** account (fresh DID, decision b2 below), handle `@klee.photos`. luminance.social indexes the commons vocabulary as one aggregator among potentially many.
 
