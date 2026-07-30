@@ -20,6 +20,10 @@ jobs:
           git add -A -- packages/lexicons packages/db/migrations
           git diff --cached --exit-code -- packages/lexicons packages/db/migrations
       - name: run db migrations
+        # Push-to-main only: PR builds must never run migrations against the
+        # prod DATABASE_URL (benign for additive migrations, a sharp edge for
+        # any future destructive one).
+        if: github.event_name == 'push'
         run: pnpm --filter @openphotos/db exec drizzle-kit migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
