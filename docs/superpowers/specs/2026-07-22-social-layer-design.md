@@ -1,5 +1,10 @@
 # Luminance.social — Social Layer Design (Phase 2)
 
+> **Status as of 2026-07-30: implemented; merged 2026-07-25.** The
+> non-Bluesky-source interactions branch (§10) remains intentionally
+> unsupported — that is phase 3b, filed in `docs/TODO.md` §2. Historical
+> document; "Luminance" prose predates the 2026-07-30 OpenPhotos rebrand.
+
 **Date:** 2026-07-22
 **Status:** Draft for review
 **Builds on:** `2026-07-21-luminance-foundation-design.md` (Foundation, shipped + launched 2026-07-22)

@@ -1,5 +1,11 @@
 # Luminance Foundation Implementation Plan
 
+> **Status as of 2026-07-30: SHIPPED.** Executed in full; the foundation
+> merged and launched at luminance.social on 2026-07-22. The checkboxes below
+> were never maintained during execution (all show unchecked) — git history
+> and `docs/TODO.md` are authoritative. Historical document: "Luminance"
+> prose predates the 2026-07-30 OpenPhotos rebrand.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the Foundation of luminance.social — the `social.luminance.*` lexicon, an ATProto AppView (Jetstream ingestion + backfill into Postgres), an image proxy, and the Next.js hub with OAuth registration — per `docs/superpowers/specs/2026-07-21-luminance-foundation-design.md`.

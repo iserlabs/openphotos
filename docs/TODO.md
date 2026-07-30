@@ -2,7 +2,7 @@
 
 _Renamed from Luminance → OpenPhotos 2026-07-30; repo is now `iserlabs/openphotos`. Protocol identifiers (`social.luminance.*` NSIDs, the `luminance.social` domain, Fly app `luminance-ingestor`, the `luminance` photo-source enum) intentionally keep the old name — they are published/live._
 
-_Last updated: 2026-07-21. Foundation is merged to main but nothing is deployed yet._
+_Last updated: 2026-07-30. Foundation launched 2026-07-22; phase-2 social layer merged 2026-07-25; phase-3a hub adoption of `social.opencontent.*` shipped 2026-07-28._
 
 ## 1. Alpha launch (next up)
 
@@ -27,7 +27,7 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] **Brainstorm + spec the social layer** (likes / comments / follows as ATProto records, notifications, engagement display) — specced (`docs/superpowers/specs/2026-07-22-social-layer-design.md`), planned, and built on `feature/social-layer` (2026-07-23). **Decision resolved: Bluesky's own lexicons** (`app.bsky.feed.like` / `app.bsky.feed.post` replies / `app.bsky.graph.follow`) for maximum interop — viewer likes/comments/follows land as real records in the viewer's repo and reach the photographer's Bluesky notifications. Shipped: interaction service (write-through rows + notifications + engagement deltas), notifications center, engagement sweep, and a dev-env write-path integration test (`apps/web/integration/social.dev-env.test.ts`).
   - Key open decision (Foundation spec §14): interactions via Bluesky's lexicons (max interop) vs `social.luminance.*` (portfolio-grade semantics) — **chose Bluesky lexicons**; `social.luminance.*` interactions deferred to phase 3 (router branch stubbed, spec §10)
   - Prereq already in place: ingestor is a connection manager, ready for a second collection-filtered Jetstream subscription; photos use strong refs
-- [ ] **Phase 3a (in brainstorming 2026-07-25)**: publisher core + klee.photos flagship — the `social.luminance.portfolio.*` write path
+- [ ] **Phase 3a (in progress; specced + planned 2026-07-28** — `docs/superpowers/plans/2026-07-28-opencontent-portfolio.md`**)**: openportfolio framework (Part A) + hub adoption of `social.opencontent.*` (Part B) both shipped 2026-07-28; commons publication (Part C) partial — governance repo done, `goat` publish blocked on registering the opencontent.social domain; klee.photos flagship (Part D) pending on the staging/DNS human gates. (Supersedes the original `social.luminance.portfolio.*` write-path framing — those NSIDs were retired 2026-07-28.)
 - [ ] **Phase 3b (filed as follow-up, own brainstorm once 3a photos flow)**: luminance-source interactions — fill the router's `{supported:false}` branch. Core protocol decision to make there: `app.bsky.feed.like` strongRefs CAN target any record, but Bluesky's AppView won't hydrate counts/notifications for non-post subjects — so luminance-source engagement needs its own count + notification path (likely hub-indexed via the existing Jetstream/reconcile machinery over like/reply collections, or `social.luminance.*` interaction lexicons)
 - [ ] Then phase 4 (full-service onboarding: account provisioning, DNS wizard, site sync)
 

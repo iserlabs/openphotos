@@ -6,14 +6,20 @@ profile/photo pages, registration, OAuth, and the image proxy.
 ## Development
 
 ```bash
-pnpm --filter web dev        # start the dev server
-pnpm --filter web build      # production build
-pnpm --filter web typecheck  # tsc --noEmit
-pnpm --filter web test       # vitest
+pnpm --filter web dev               # start the dev server
+pnpm --filter web build             # production build
+pnpm --filter web typecheck         # tsc --noEmit
+pnpm --filter web test              # vitest unit tests
+pnpm --filter web test:integration  # dev-env write-path suite (real local PDS)
+pnpm --filter web test:e2e          # Playwright; E2E_BASE_URL sets the target
 ```
 
 Copy `.env.example` to `.env.local` and fill in real values before running
 against a live database.
+
+Deployed on Vercel (project `luminance-social`, Root Directory `apps/web`);
+`vercel.json` here hops to the monorepo root so the workspace packages
+resolve during the build.
 
 ## Route-naming invariant
 

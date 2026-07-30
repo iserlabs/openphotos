@@ -1,5 +1,12 @@
 # OpenContent Commons + Portfolio Framework (Phase 3a) — Design
 
+> **Status as of 2026-07-30: partially executed.** Framework (openportfolio)
+> and hub adoption shipped 2026-07-28; commons publication is blocked on
+> registering `opencontent.social`; the klee.photos flagship is pending. The
+> `social.opencontent.*` schemas now live in the sibling
+> `opencontent-lexicons` repo (source of truth). See the matching plan's
+> banner and `docs/TODO.md`.
+
 _Approved through section-by-section review 2026-07-25 → 2026-07-28. Supersedes the phase-3 "publisher core" framing in docs/TODO.md §2._
 
 ## 1. Overview

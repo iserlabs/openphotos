@@ -1,5 +1,11 @@
 # Luminance.social — Foundation Design (Sub-project 1 of 4)
 
+> **Status as of 2026-07-30: implemented and launched 2026-07-22** (see the
+> matching plan's banner and `docs/TODO.md` §1). Historical document —
+> "Luminance" prose predates the 2026-07-30 OpenPhotos rebrand; the live
+> identifiers (`social.luminance.*`, luminance.social) intentionally keep the
+> name.
+
 **Date:** 2026-07-21
 **Status:** Draft for review
 **Scope of this spec:** Sub-project 1 ("Foundation") of the luminance.social platform. Product-level decisions and the full decomposition are recorded here as context; only the Foundation is designed to implementation depth.

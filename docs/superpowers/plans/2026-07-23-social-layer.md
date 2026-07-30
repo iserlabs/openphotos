@@ -1,5 +1,11 @@
 # Social Layer (Phase 2) Implementation Plan
 
+> **Status as of 2026-07-30: SHIPPED.** Built on `feature/social-layer` and
+> merged 2026-07-25 (likes/comments/follows, notifications, engagement sweep),
+> plus a fast-follow wave the same week. The checkboxes below were never
+> maintained during execution — git history and `docs/TODO.md` are
+> authoritative.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Likes, comments, follows, and a notification center for luminance.social — written as real Bluesky records in the viewer's own repo (source-native, spec option C), with engagement read via write-through + Bluesky AppView hydration.

@@ -1,5 +1,13 @@
 # OpenContent Commons + Portfolio Framework (Phase 3a) Implementation Plan
 
+> **Status as of 2026-07-30:** Parts A & B shipped 2026-07-28 (openportfolio
+> framework; hub adoption — migration 0006, opencontent mappers/ingest,
+> `social.luminance.portfolio.*` retirement). Part C partial — C1 done
+> (`opencontent-lexicons` governance repo), C2 blocked on the unregistered
+> `opencontent.social` domain. Part D pending on the staging/DNS gates
+> (G1/G2). Checkboxes below were never maintained (0/72 checked) — git
+> history and `docs/TODO.md` are authoritative.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the `social.opencontent.*` lexicon commons, the self-hostable ATProto portfolio framework (`iserlabs/openportfolio`), Luminance's adoption of the commons, and the klee.photos flagship deployment.
