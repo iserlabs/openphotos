@@ -49,7 +49,7 @@ Follow `docs/runbooks/launch-alpha.md` step by step. Summary of the sequence:
 - [x] Backfill status + manual retry visible in `/settings` (2026-07-25) — failed-refresh callout + retry button
 - [x] Admin audit log (2026-07-25) — `admin_audit` table (migration 0005), written by the takedown action
 - [x] CI: gate the db-migrate step to push events only (2026-07-30) — `if: github.event_name == 'push'` on the migrate step in `ci.yml`; surfaced by the 3a final review (it previously also ran on pull_request against the prod DATABASE_URL; benign for additive migrations, a sharp edge for any future destructive one)
-- [x] Run `test:integration` in CI (2026-07-25) — nightly workflow (with workflow_dispatch), alongside the prod E2E job
+- [x] Run `test:integration` in CI (web 2026-07-25; ingestor 2026-07-30) — nightly workflow (with workflow_dispatch), alongside the prod E2E job; both dev-env suites (web + ingestor rebuild drill) now run in the nightly `integration` job, no secrets exposed
 - [x] Assorted minors (2026-07-25): profile load-more (cursor pagination), React.cache dedup for photo+profile metadata queries, purge-vs-inflight-backfill race guard (per-collection status re-check), series cover fallback to first item (Grain galleries)
 
 ### Phase-2 social-layer carried minors (filed during task reviews; none block the branch merge)

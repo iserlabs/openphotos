@@ -31,9 +31,13 @@ success-criterion 3 (the rebuild drill). It spins up a real PDS with
 (`TestNetworkNoAppView`), writes real photo records, backfills them over HTTP,
 honors a live delete, then drops the index and rebuilds it to convergence.
 
-It is **excluded from the default `test` script** (and therefore CI) via
-`vitest.config.ts`, and runs only under `test:integration` (which uses
-`vitest.integration.config.ts`).
+It is **excluded from the default `test` script** (and therefore the per-push
+CI gate) via `vitest.config.ts`, and runs under `test:integration` (which uses
+`vitest.integration.config.ts`). It runs nightly in CI — the `integration` job
+of `.github/workflows/nightly.yml` (also `workflow_dispatch`-able), after the
+web dev-env suite. That job passes no secrets: the suite's index DB is an
+in-process PGlite and the PDS is dev-env's localhost SQLite instance, so it
+cannot touch the production database.
 
 Requirements:
 

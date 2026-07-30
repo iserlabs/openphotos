@@ -1,6 +1,8 @@
 name: nightly
 # Nightly (and on-demand) checks that don't belong in the per-push merge gate:
-#  - the dev-env integration suite (spins a real SQLite-native PDS — slow)
+#  - the dev-env integration suites (web + ingestor rebuild drill — each spins
+#    a real SQLite-native PDS via @atproto/dev-env — slow). No secrets: both
+#    suites are fully local (PGlite index DB in-process, PDS on localhost).
 #  - the Playwright E2E suite against PRODUCTION (live-data smoke: feed render,
 #    photo-page params regression, image-proxy headers)
 on:
@@ -19,6 +21,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm --filter web test:integration
+      # Ingestor rebuild drill: real dev-env PDS + in-process PGlite index.
+      # ~13s locally; 10 min covers cold dev-env boot on CI runners.
+      - run: pnpm --filter ingestor test:integration
+        timeout-minutes: 10
 
   e2e-production:
     runs-on: ubuntu-latest
